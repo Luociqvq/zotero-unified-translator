@@ -1,0 +1,80 @@
+<linkset>
+  <html:link rel="localization" href="__addonRef__-preferences.ftl" />
+</linkset>
+<groupbox
+  onload="Zotero.ZoteroUnifiedTranslator.hooks.onPrefsEvent('load', { window })"
+>
+  <label><html:h2 data-l10n-id="pref-title"></html:h2></label>
+  <html:p data-l10n-id="pref-description"></html:p>
+
+  <separator class="thin" />
+  <label><html:h3 data-l10n-id="pref-instant-section"></html:h3></label>
+  <hbox align="center">
+    <html:label for="zut-instant-provider" data-l10n-id="pref-instant-provider"></html:label>
+    <html:select id="zut-instant-provider">
+      <html:option value="google-free" data-l10n-id="pref-provider-google"></html:option>
+      <html:option value="openai-compatible" data-l10n-id="pref-provider-openai"></html:option>
+    </html:select>
+  </hbox>
+  <hbox align="center">
+    <html:label for="zut-target-language" data-l10n-id="pref-target-language"></html:label>
+    <html:select id="zut-target-language">
+      <html:option value="zh-CN">简体中文</html:option>
+      <html:option value="zh-TW">繁體中文</html:option>
+      <html:option value="en">English</html:option>
+      <html:option value="ja">日本語</html:option>
+      <html:option value="ko">한국어</html:option>
+      <html:option value="de">Deutsch</html:option>
+      <html:option value="fr">Français</html:option>
+      <html:option value="es">Español</html:option>
+    </html:select>
+  </hbox>
+  <checkbox id="zut-save-annotation" data-l10n-id="pref-save-annotation" />
+  <hbox align="center">
+    <html:label for="zut-openai-endpoint" data-l10n-id="pref-openai-endpoint"></html:label>
+    <html:input id="zut-openai-endpoint" type="url" />
+  </hbox>
+  <hbox align="center">
+    <html:label for="zut-openai-model" data-l10n-id="pref-openai-model"></html:label>
+    <html:input id="zut-openai-model" type="text" />
+  </hbox>
+  <hbox align="center">
+    <html:label for="zut-openai-key" data-l10n-id="pref-openai-key"></html:label>
+    <html:input id="zut-openai-key" type="password" />
+    <button id="zut-clear-openai-key" data-l10n-id="pref-clear-key" />
+  </hbox>
+
+  <separator class="thin" />
+  <label><html:h3 data-l10n-id="pref-full-section"></html:h3></label>
+  <hbox align="center">
+    <html:label for="zut-backend-endpoint" data-l10n-id="pref-endpoint"></html:label>
+    <html:input id="zut-backend-endpoint" type="url" />
+  </hbox>
+  <html:p data-l10n-id="pref-endpoint-hint"></html:p>
+  <hbox align="center">
+    <html:label for="zut-backend-token" data-l10n-id="pref-backend-token"></html:label>
+    <html:input id="zut-backend-token" type="password" />
+    <button id="zut-clear-backend-token" data-l10n-id="pref-clear-key" />
+  </hbox>
+  <hbox align="center">
+    <html:label for="zut-full-engine" data-l10n-id="pref-engine"></html:label>
+    <html:select id="zut-full-engine">
+      <html:option value="pdf2zh_next">pdf2zh-next 2.9.0</html:option>
+    </html:select>
+  </hbox>
+  <hbox align="center">
+    <html:label for="zut-output-mode" data-l10n-id="pref-output-mode"></html:label>
+    <html:select id="zut-output-mode">
+      <html:option value="bilingual" data-l10n-id="pref-output-bilingual"></html:option>
+      <html:option value="translated" data-l10n-id="pref-output-translated"></html:option>
+    </html:select>
+  </hbox>
+  <checkbox id="zut-show-progress" data-l10n-id="pref-show-progress" />
+
+  <hbox align="center">
+    <button id="zut-save-settings" data-l10n-id="pref-save" />
+    <button id="zut-instant-test" data-l10n-id="pref-instant-test" />
+    <button id="zut-health-check" data-l10n-id="pref-health-check" />
+  </hbox>
+  <html:p id="zut-diagnostics" role="status" style="white-space: pre-line;"></html:p>
+</groupbox>

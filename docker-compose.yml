@@ -1,0 +1,46 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "zut_server"]
+    env_file:
+      - .env
+    environment:
+      ZUT_BIND_HOST: 0.0.0.0
+      ZUT_DATA_DIR: /app/data
+    ports:
+      - "127.0.0.1:8890:8890"
+    volumes:
+      - zut-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8890/api/v1/health',headers={'Authorization':'Bearer '+os.environ['ZUT_AUTH_TOKEN']}); urllib.request.urlopen(r,timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "zut_server.worker"]
+    env_file:
+      - .env
+    environment:
+      ZUT_DATA_DIR: /app/data
+    volumes:
+      - zut-data:/app/data
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  zut-data:

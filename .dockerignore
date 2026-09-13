@@ -1,0 +1,11 @@
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+.research-*
+.env
+**/.env
+**/smoke-data
+data*
+release
+plugin/.scaffold

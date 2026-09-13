@@ -1,0 +1,5 @@
+Zotero Unified Translator（ZUT）原创代码按 AGPL-3.0-or-later 方向组织。
+
+本仓库当前没有直接复制 zotero-pdf-translate 或 zotero-pdf2zh 的源代码。
+正式发布前必须对参考项目、PDF 翻译引擎和 npm/Python 依赖完成许可证审计，
+并在此文件中补充对应的版权和许可证声明。

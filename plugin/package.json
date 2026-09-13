@@ -1,0 +1,31 @@
+{
+  "name": "zotero-unified-translator",
+  "version": "0.1.8",
+  "private": true,
+  "description": "Instant and full-document translation for Zotero",
+  "type": "module",
+  "config": {
+    "addonName": "Zotero Unified Translator",
+    "addonID": "zotero-unified-translator@zut.dev",
+    "addonRef": "zut",
+    "addonInstance": "ZoteroUnifiedTranslator",
+    "prefsPrefix": "extensions.zut",
+    "updateURL": "https://updates.zut.invalid/updates.json"
+  },
+  "author": "Luoci",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "build": "tsc --project tsconfig.json --noEmit && node scripts/build.mjs",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "package": "npm run build",
+    "clean": "node -e \"import('node:fs').then(({ rmSync }) => rmSync('dist', { recursive: true, force: true }))\""
+  },
+  "devDependencies": {
+    "adm-zip": "0.6.0",
+    "esbuild": "0.28.2",
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3",
+    "zotero-types": "^4.1.0-beta.4"
+  }
+}
