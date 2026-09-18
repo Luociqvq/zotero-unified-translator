@@ -91,17 +91,12 @@ fetch() {
        -o "$2" "${RAW}/$1" || die "failed to fetch $1 from ${REF}"
 }
 
-# --------------------------------------------------------------------- 1. files
-log "webroot: ${WEBROOT}"
-install -d -m 0755 "$WEBROOT" "$WEBROOT/release"
-
-log "fetching manifest and landing page from ${REPO}@${REF}"
-fetch 'updates.json'           "$WEBROOT/updates.json"
-fetch 'deploy/site/index.html' "$WEBROOT/index.html"
-
-# ------------------------------------------------------------- 2. read manifest
-# The newest entry is what Zotero hands out, so that is the one we must mirror.
-MANIFEST_META="$(python3 - "$WEBROOT/updates.json" <<'PY'
+# Print "<version> <sha256> <update_link>" for the newest entry in a manifest.
+# Newest is what Zotero hands out, so it is the only entry worth mirroring.
+# Errors go to stderr and are never swallowed: a manifest we cannot parse has to
+# stop the deploy, not quietly turn into an empty version string.
+manifest_meta() {
+  python3 - "$1" <<'PY'
 import json, re, sys
 
 with open(sys.argv[1], encoding='utf-8') as fh:
@@ -121,12 +116,27 @@ if not updates:
 updates.sort(key=lambda u: [int(n) for n in re.findall(r'\d+', u['version'])])
 newest = updates[-1]
 
-# One line: version, digest, link.
 print(newest['version'],
       (newest.get('update_hash') or '').split(':')[-1],
       newest.get('update_link') or '')
 PY
-)" || die "could not parse ${WEBROOT}/updates.json"
+}
+
+newest_version() {
+  manifest_meta "$1" | awk '{print $1}'
+}
+
+# --------------------------------------------------------------------- 1. files
+log "webroot: ${WEBROOT}"
+install -d -m 0755 "$WEBROOT" "$WEBROOT/release"
+
+log "fetching manifest and landing page from ${REPO}@${REF}"
+fetch 'updates.json'           "$WEBROOT/updates.json"
+fetch 'deploy/site/index.html' "$WEBROOT/index.html"
+
+# ------------------------------------------------------------- 2. read manifest
+MANIFEST_META="$(manifest_meta "$WEBROOT/updates.json")" \
+  || die "could not parse ${WEBROOT}/updates.json"
 
 read -r VER HASH LINK <<< "$MANIFEST_META"
 
@@ -323,22 +333,29 @@ for path in /updates.json "/release/${ARTIFACT}-${VER}.xpi" /; do
   printf '    %-46s %s\n' "$path" "$code"
 done
 
-SERVED="$(curl -sS -k --max-time 20 --resolve "${DOMAIN}:${PORT}:127.0.0.1" \
-          "${SCHEME}://${DOMAIN}/updates.json" 2>/dev/null || true)"
-if [ -n "$SERVED" ]; then
-  SERVED_VER="$(printf '%s' "$SERVED" | python3 -c 'import json,sys
-d=json.load(sys.stdin)
-a=d["addons"]
-u=[x for x in a[sorted(a)[0]]["updates"] if x.get("version")]
-u.sort(key=lambda x:[int(n) for n in __import__("re").findall(r"\d+",x["version"])])
-print(u[-1]["version"])' 2>/dev/null || echo '?')"
+# Read the manifest back through nginx rather than off disk: that is what a
+# client actually gets, so it also catches a vhost that resolves to the wrong
+# root or a cache layer serving something stale.
+SERVED_FILE="${TMP}/served-updates.json"
+if curl -sS -k --max-time 20 --resolve "${DOMAIN}:${PORT}:127.0.0.1" \
+     -o "$SERVED_FILE" "${SCHEME}://${DOMAIN}/updates.json"; then
+  DEPLOYED_SUM="$(sha256sum "$WEBROOT/updates.json" | awk '{print $1}')"
+  SERVED_SUM="$(sha256sum "$SERVED_FILE" | awk '{print $1}')"
+  if [ "$DEPLOYED_SUM" != "$SERVED_SUM" ]; then
+    die "the manifest served over ${SCHEME} is not the file that was deployed
+       deployed: ${DEPLOYED_SUM}
+       served  : ${SERVED_SUM}"
+  fi
+  log "served manifest is byte-identical to the deployed file"
+
+  SERVED_VER="$(newest_version "$SERVED_FILE")"
   if [ "$SERVED_VER" = "$VER" ]; then
-    log "served manifest matches the published version ${VER}"
+    log "served manifest publishes version ${VER}, as expected"
   else
-    die "served manifest reports ${SERVED_VER} but ${VER} was expected"
+    die "served manifest reports ${SERVED_VER}, expected ${VER}"
   fi
 else
-  warn "could not read the manifest back over loopback — check nginx logs"
+  warn "could not read the manifest back over loopback — check ${LOG_DIR}/${DOMAIN}-error.log"
 fi
 
 log "done"
