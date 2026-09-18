@@ -64,10 +64,13 @@ getent hosts zut.eieu.cn     # 期望输出 154.202.118.93  zut.eieu.cn
 ### 2. 部署（含签证书）
 
 ```bash
+SHA=<当前 main 的 commit SHA>
 curl -sSL -o /tmp/deploy-updates.sh \
-  https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/scripts/deploy-updates.sh
+  "https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/${SHA}/scripts/deploy-updates.sh"
 sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn --issue-cert
 ```
+
+用 commit SHA 而不是 `main` 拉脚本：raw CDN 按路径缓存，分支名可能拿到旧内容（详见第四节）。
 
 不带 `--issue-cert` 时只部署 HTTP；加上后，脚本会在证书缺失时调用 certbot 走 **HTTP-01** 校验（复用服务器上已有的 Let's Encrypt 账号），签发成功再把 vhost 切换到 HTTPS。
 
@@ -87,10 +90,18 @@ curl -sSI https://zut.eieu.cn/updates.json | grep -i cache-control   # 应含 no
 发完 GitHub Release 之后：
 
 ```bash
-sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn
+SHA=<v1.0.2 的 commit SHA>       # 本地取：git rev-parse v1.0.2
+curl -sSL -o /tmp/deploy-updates.sh \
+  "https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/${SHA}/scripts/deploy-updates.sh"
+sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn \
+  --ref v1.0.2 --expect-version 1.0.2
 ```
 
-也可以重新拉一次脚本，确保用的是仓库里的最新版本。
+> ⚠️ **不要用 `--ref main`。**
+> `raw.githubusercontent.com` **按路径缓存**，且查询串（`?t=…`）绕不过去 —— 实测刚推送后重新按同一路径拉取，拿到的仍是推送前的内容。
+> 按分支名部署，会在发版后几分钟内**静默地把上一版又部署一遍**，而且脚本会报"成功"。
+> 所以：ref 一律用不可变的 **tag 或 commit SHA**（路径全新 ⇒ 不命中旧缓存），并配合 `--expect-version` 断言。
+> 同理，取脚本本身也要用 SHA，否则你执行的可能是旧版脚本。
 
 脚本是**幂等**的，重复执行安全。它会：
 
@@ -116,6 +127,8 @@ sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn
 | certbot 报 `Failed authorization procedure` | `zut.eieu.cn` 未解析到本机，或 80 被墙 | 核对 DNS；确认 `curl -I http://zut.eieu.cn/.well-known/acme-challenge/` 可达 |
 | 用户始终收不到更新 | 清单被缓存 / `update_url` 指向旧地址 | 查响应头 `Cache-Control`；核对已装版本是否 ≥ 清单版本 |
 | 更新通道整站 404 | webroot 或 vhost 被面板改动覆盖 | 重跑部署脚本（幂等，会重建） |
+| 部署报"成功"但线上还是上一版 | 用了 `main` 之类的分支 ref，raw CDN 仍在发旧内容 | 改用 tag / commit SHA，并加 `--expect-version` |
+| 执行的脚本行为与仓库不一致 | 取脚本时用了分支 ref，拿到旧文件 | 取脚本也用 commit SHA |
 
 > 站点是通过面板纳管的。**不要手工编辑** `/xp/panel/vhost/nginx/zut.eieu.cn.conf` —— 那份文件每次部署都会重新生成，且面板改动也可能覆盖它。
 > 要改配置，改仓库里的 `scripts/deploy-updates.sh`。

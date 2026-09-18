@@ -148,16 +148,20 @@ gh release view v1.0.2 --json assets
 
 ### 8. 部署到更新服务器
 
-清单与产物上传到 Release 之后，把自建通道同步过去：
+清单与产物上传到 Release 之后，把自建通道同步过去。**必须用 tag 或 commit SHA 指定 ref，不要用 `main`** —— `raw.githubusercontent.com` 按路径缓存，刚推送的 `main` 往往还是旧内容，会静默部署成上一版：
 
 ```bash
-# 在更新服务器上（us8h8g）执行
+# 在更新服务器上（us8h8g）执行。SHA 在本地取：git rev-parse v1.0.2
+SHA=<v1.0.2 的 commit SHA>
 curl -sSL -o /tmp/deploy-updates.sh \
-  https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/scripts/deploy-updates.sh
-sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn
+  "https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/${SHA}/scripts/deploy-updates.sh"
+sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn \
+  --ref "v1.0.2" --expect-version 1.0.2
 ```
 
-脚本会拉取仓库里的 `updates.json` 与落地页、从 GitHub Release 下载该版本的 XPI、**校验 sha256 与清单一致后**才落盘、重新生成 nginx vhost 并 reload。任何一步不符就直接失败退出，不会把不一致的内容发布出去。
+脚本会拉取该 ref 下的 `updates.json` 与落地页、从 GitHub Release 下载对应版本的 XPI、**校验 sha256 与清单一致后**才落盘、重新生成 nginx vhost 并 reload。任何一步不符就直接失败退出，不会把不一致的内容发布出去。
+
+`--expect-version` 是专门防上面那个坑的：清单里的版本和预期不符就立刻失败，而不是"成功地"把旧版本又部署一遍。
 
 > 首次部署需要证书时加 `--issue-cert`，详见 [docs/deployment-updates.md](deployment-updates.md)。
 
@@ -193,6 +197,7 @@ sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn
 | 清单明明是新版，用户却收不到更新 | 清单响应被缓存，Zotero 看到的是旧内容 | 确认响应头含 `Cache-Control: no-cache`（本项目的 vhost 已设置） |
 | 提示有更新、下载后却安装失败 | XPI 用了固定文件名，命中了上一版的缓存 | 用带版本号的文件名；本项目服务器即按此约定托管 |
 | 部署脚本报 `digest mismatch` | Release 里的产物与清单 hash 不符，或还没发 Release | 先完成第 6 步，确认第 7 步 digest 与清单一致后再部署 |
+| 部署"成功"了，但线上还是上一版 | 用了 `--ref main`，raw CDN 仍在发旧内容 | 改用 tag 或 commit SHA，并带 `--expect-version`（见第 8 步） |
 
 ---
 

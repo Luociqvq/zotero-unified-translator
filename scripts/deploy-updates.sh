@@ -33,6 +33,7 @@ LOG_DIR="${LOG_DIR:-/xp/wwwlogs}"
 CERT_DIR="${CERT_DIR:-}"
 ISSUE_CERT="${ISSUE_CERT:-0}"
 EMAIL="${EMAIL:-}"
+EXPECT_VERSION="${EXPECT_VERSION:-}"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[!]\033[0m %s\n' "$*" >&2; }
@@ -46,11 +47,20 @@ Usage: sudo bash scripts/deploy-updates.sh [options]
                       e.g. zut.eieu.cn. Also decides the default webroot.
   --repo <owner/name> GitHub repository (default Luociqvq/zotero-unified-translator)
   --ref <ref>         Git ref to pull updates.json and the site from (default main)
+  --expect-version <v> Fail unless the fetched manifest publishes exactly <v>.
   --webroot <path>    Document root (default /xp/www/<domain>)
   --cert-dir <path>   Let's Encrypt live dir (default /etc/letsencrypt/live/<domain>)
   --email <address>   Contact address, only used together with --issue-cert
   --issue-cert        Run certbot (webroot) when no certificate exists yet
   -h, --help          Show this help
+
+raw.githubusercontent.com caches by PATH, so a branch ref can keep serving the
+pre-push content for a few minutes. Always pass --expect-version together with a
+tag or commit SHA ref, otherwise a deploy right after a release can silently
+publish the previous version:
+
+  sudo bash scripts/deploy-updates.sh --domain zut.eieu.cn \
+       --ref v1.0.2 --expect-version 1.0.2
 EOF
 }
 
@@ -59,6 +69,7 @@ while [ $# -gt 0 ]; do
     --domain)     DOMAIN="${2:-}";   shift 2 ;;
     --repo)       REPO="${2:-}";     shift 2 ;;
     --ref)        REF="${2:-}";      shift 2 ;;
+    --expect-version) EXPECT_VERSION="${2:-}"; shift 2 ;;
     --webroot)    WEBROOT="${2:-}";  shift 2 ;;
     --cert-dir)   CERT_DIR="${2:-}"; shift 2 ;;
     --email)      EMAIL="${2:-}";    shift 2 ;;
@@ -142,6 +153,16 @@ read -r VER HASH LINK <<< "$MANIFEST_META"
 
 [ -n "${VER:-}" ]  || die "could not read a version from the manifest"
 [ -n "${HASH:-}" ] || die "manifest entry for ${VER} has no update_hash"
+
+# Guard against publishing a stale ref. raw.githubusercontent.com caches by path
+# and a branch ref keeps serving the pre-push content for a few minutes, so a
+# deploy run right after a release can otherwise fetch the previous manifest and
+# quietly redeploy the previous version -- which looks like success.
+if [ -n "$EXPECT_VERSION" ] && [ "$VER" != "$EXPECT_VERSION" ]; then
+  die "the manifest at ref '${REF}' publishes ${VER}, but ${EXPECT_VERSION} was expected.
+     The raw CDN caches by path, so a branch ref is often stale right after a push.
+     Re-run with --ref v${EXPECT_VERSION} (or the release commit SHA)."
+fi
 
 log "manifest publishes version ${VER}"
 log "expected sha256 ${HASH}"
