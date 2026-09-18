@@ -221,14 +221,21 @@ write_vhost() {
   # checks, and from the client that is indistinguishable from "no new version",
   # so this rule must not depend on which branch happens to be generated.
   local manifest_location
-  manifest_location=$(cat <<'SNIP'
+  manifest_location=$(cat <<SNIP
 
     # Zotero must never see a cached manifest, or it keeps treating the
     # installed version as the latest and silently never offers an update.
+    #
+    # root is repeated inside this block on purpose. An exact-match location
+    # wins over the prefix location and inherits nothing from it, so relying on
+    # a root declared under location / makes this 404 against nginx's built-in
+    # default root instead of serving the file.
     location = /updates.json {
+        root ${WEBROOT};
         add_header Cache-Control "no-cache, must-revalidate" always;
         add_header Access-Control-Allow-Origin "*" always;
         default_type application/json;
+        try_files \$uri =404;
     }
 SNIP
 )
@@ -241,6 +248,9 @@ server {
     listen 80;
     listen [::]:80;
     server_name ${DOMAIN};
+
+    root ${WEBROOT};
+    index index.html;
 
     # Left on plain HTTP so certbot can renew without a redirect dance.
     location ^~ /.well-known/acme-challenge/ {
@@ -266,8 +276,6 @@ EOF
 ${manifest_location}
 
     location / {
-        root ${WEBROOT};
-        index index.html;
         try_files \$uri \$uri/ =404;
     }
 }
@@ -359,37 +367,50 @@ if [ "$HAS_CERT" = "1" ]; then
 fi
 
 log "verifying over ${SCHEME} on loopback"
+
+# Read the manifest back through nginx rather than off disk: that is what a
+# client receives, so it also catches a vhost resolving to the wrong root.
+#
+# Retried, because `nginx -s reload` keeps the old workers alive until their
+# in-flight requests finish. The first read-back can therefore still be answered
+# by the previous configuration, which would make a correct deploy look broken.
+sha_of() { sha256sum "$1" 2>/dev/null | awk '{print $1}'; }
+
+SERVED_FILE="${TMP}/served-updates.json"
+DEPLOYED_SUM="$(sha_of "$WEBROOT/updates.json")"
+attempt=1
+while :; do
+  curl -sS -k --max-time 20 --resolve "${DOMAIN}:${PORT}:127.0.0.1" \
+       -o "$SERVED_FILE" "${SCHEME}://${DOMAIN}/updates.json" || true
+  if [ "$(sha_of "$SERVED_FILE")" = "$DEPLOYED_SUM" ]; then
+    break
+  fi
+  if [ "$attempt" -ge 5 ]; then
+    die "the manifest served over ${SCHEME} does not match the deployed file
+       deployed: ${DEPLOYED_SUM}
+       served  : $(sha_of "$SERVED_FILE")
+     First bytes of the response:
+$(head -c 300 "$SERVED_FILE" 2>/dev/null | sed 's/^/       /')"
+  fi
+  attempt=$((attempt + 1))
+  sleep 1
+done
+log "served manifest is byte-identical to the deployed file"
+
+SERVED_VER="$(newest_version "$SERVED_FILE")" \
+  || die "the served manifest is not a manifest this script can parse"
+if [ "$SERVED_VER" = "$VER" ]; then
+  log "served manifest publishes version ${VER}, as expected"
+else
+  die "served manifest reports ${SERVED_VER}, expected ${VER}"
+fi
+
 for path in /updates.json "/release/${ARTIFACT}-${VER}.xpi" /; do
   code="$(curl -sS -o /dev/null -w '%{http_code}' -k --max-time 20 \
           --resolve "${DOMAIN}:${PORT}:127.0.0.1" \
           "${SCHEME}://${DOMAIN}${path}" 2>/dev/null || echo 000)"
   printf '    %-46s %s\n' "$path" "$code"
 done
-
-# Read the manifest back through nginx rather than off disk: that is what a
-# client actually gets, so it also catches a vhost that resolves to the wrong
-# root or a cache layer serving something stale.
-SERVED_FILE="${TMP}/served-updates.json"
-if curl -sS -k --max-time 20 --resolve "${DOMAIN}:${PORT}:127.0.0.1" \
-     -o "$SERVED_FILE" "${SCHEME}://${DOMAIN}/updates.json"; then
-  DEPLOYED_SUM="$(sha256sum "$WEBROOT/updates.json" | awk '{print $1}')"
-  SERVED_SUM="$(sha256sum "$SERVED_FILE" | awk '{print $1}')"
-  if [ "$DEPLOYED_SUM" != "$SERVED_SUM" ]; then
-    die "the manifest served over ${SCHEME} is not the file that was deployed
-       deployed: ${DEPLOYED_SUM}
-       served  : ${SERVED_SUM}"
-  fi
-  log "served manifest is byte-identical to the deployed file"
-
-  SERVED_VER="$(newest_version "$SERVED_FILE")"
-  if [ "$SERVED_VER" = "$VER" ]; then
-    log "served manifest publishes version ${VER}, as expected"
-  else
-    die "served manifest reports ${SERVED_VER}, expected ${VER}"
-  fi
-else
-  warn "could not read the manifest back over loopback — check ${LOG_DIR}/${DOMAIN}-error.log"
-fi
 
 log "done"
 cat <<EOF
