@@ -196,7 +196,8 @@ server\.venv\Scripts\python.exe -m zut_server.cleanup
 ```
 plugin/       Zotero 插件源码、资源、构建与回归测试（TypeScript + esbuild）
 server/       ZUT 后端：API、SQLite、Worker、引擎适配器（Python / FastAPI）
-scripts/      Windows 下的安装、启动、停止、打包脚本，以及更新清单校验
+scripts/      Windows 下的安装、启动、停止、打包脚本，更新清单校验，以及更新通道部署
+deploy/       更新通道的站点资源（自建域名的落地页）
 docs/         API 契约、部署说明、功能说明、验收清单与记录、发版流程
 release/      供安装的 XPI 产物
 updates.json  Zotero 读取的自动更新清单
@@ -268,6 +269,7 @@ Set-Location server
 | [人工验收清单](docs/acceptance-checklist.md) | 可勾选的本机验收步骤 |
 | [验收记录](docs/verification.md) | 各版本验证结论与产物校验值 |
 | [发版与自动更新维护](docs/release.md) | 发布流程与更新清单维护 |
+| [更新通道部署](docs/deployment-updates.md) | 自建更新通道的服务器侧部署与排障 |
 | [第三方依赖与许可证](THIRD-PARTY.md) | 逐项依赖许可清单 |
 | [NOTICE](NOTICE) | 第三方组件与参考项目声明 |
 
