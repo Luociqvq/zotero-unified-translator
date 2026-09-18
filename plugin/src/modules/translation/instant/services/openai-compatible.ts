@@ -18,6 +18,29 @@ function normalizeText(text: string): string {
     .trim();
 }
 
+function targetLanguageLabel(code: string): string {
+  switch (code) {
+    case "zh-CN":
+      return "Simplified Chinese (简体中文, not Traditional Chinese)";
+    case "zh-TW":
+      return "Traditional Chinese (繁體中文)";
+    case "en":
+      return "English";
+    case "ja":
+      return "Japanese";
+    case "ko":
+      return "Korean";
+    case "de":
+      return "German";
+    case "fr":
+      return "French";
+    case "es":
+      return "Spanish";
+    default:
+      return code;
+  }
+}
+
 export class OpenAICompatibleTranslator implements InstantTranslator {
   readonly id = "openai-compatible";
   readonly displayName = "HY-MT1.5-1.8B（OpenAI 兼容）";
@@ -60,14 +83,14 @@ export class OpenAICompatibleTranslator implements InstantTranslator {
           {
             role: "system",
             content:
-              "Translate accurately. Preserve formulas, citations, names, and markup. Return only the translation.",
+              "Translate accurately. Preserve formulas, citations, names, and markup. Follow the target language exactly. Return only the translation.",
           },
           {
             role: "user",
             content:
               (request.context ? "Context:\n" + request.context + "\n\n" : "") +
               "Translate to " +
-              request.targetLanguage +
+              targetLanguageLabel(request.targetLanguage) +
               ":\n" +
               normalizedText,
           },

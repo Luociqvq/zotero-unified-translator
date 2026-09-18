@@ -208,11 +208,11 @@ export class ZutAddon {
       translate: async (signal, setStatus) => {
         const cached = this.instantCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) {
-          setStatus("命中最近翻译缓存");
+          setStatus("使用缓存");
           return cached.result;
         }
         this.instantCache.delete(cacheKey);
-        setStatus("正在请求即时翻译接口");
+        setStatus("请求中");
         const apiKey =
           providerID === "openai-compatible"
             ? await this.credentials.get(providerConfig.apiKeyRef)
@@ -228,7 +228,7 @@ export class ZutAddon {
               : undefined,
           ),
         );
-        setStatus("正在等待即时翻译接口返回");
+        setStatus("等待返回");
         const result = await coordinator.translate(
           providerID,
           {
@@ -252,8 +252,12 @@ export class ZutAddon {
     };
     if (config.instant.saveAnnotation) {
       actions.save = async (result) => {
-        const itemID = selection.reader.itemID;
-        if (!itemID) {
+        const reader = selection.reader as _ZoteroTypes.ReaderInstance & {
+          _item?: { id?: number };
+        };
+        const itemID =
+          typeof reader.itemID === "number" ? reader.itemID : reader._item?.id;
+        if (typeof itemID !== "number") {
           throw new Error("无法确定当前 PDF 附件");
         }
         const attachment = Zotero.Items.get(itemID);

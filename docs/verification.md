@@ -1,4 +1,4 @@
-# ZUT 0.1.8 验收记录
+# ZUT 1.0.0 验收记录
 
 日期：2026-09-08。目标宿主：Zotero 10.0.1；本次自动化运行环境：Windows、Python 3.12.10、PowerShell 5.1。
 
@@ -19,7 +19,7 @@
 | 插件图标资源 | 通过，48×48 与 96×96 PNG 均为 RGBA，透明背景已保留 |
 | 即时/整篇服务配置隔离 | 通过，插件默认即时服务为 `fanyi.eieu.cn`，整篇服务使用独立 ZUT 后端地址；后端 LLM 配置不复用插件即时配置 |
 | 默认翻译接口连通性 | 通过，`https://fanyi.eieu.cn/` 与 `/health` 返回服务状态；未提供 Key 的翻译请求按预期返回 401 |
-| 真实 Zotero 10.0.1 隔离启动 | 通过，当前 0.1.8 XPI 被识别为兼容、appDisabled=false；直接放入 profile extensions 目录时宿主默认 userDisabled=true |
+| 真实 Zotero 10.0.1 隔离启动 | 通过，当前 1.0.0 XPI 被识别为兼容、appDisabled=false；直接放入 profile extensions 目录时宿主默认 userDisabled=true |
 | 插件 startup | 通过，当前 XPI 在模拟宿主中确认 Reader、菜单和设置注册；真实宿主的兼容性判定已通过 |
 
 插件回归在 Node 模拟宿主中加载实际 XPI 的 bootstrap 与脚本，并检查 Reader、菜单和设置注册；它不是 Zotero GUI 测试。其余回归验证现代凭据接口、PDF 二进制读写、保留最新评论与去重、下载同源校验、XUL 标签。
@@ -36,10 +36,10 @@ SHA-256：
 B9CC8BEEC89BF17D8CEB0772DB84B142A15CBAB40F8B4608835995AC49F1EC0D
 ~~~
 
-版本：0.1.8；作者：Luoci；ID：zotero-unified-translator@zut.dev。
+版本：1.0.0；作者：Luoci；ID：zotero-unified-translator@zut.dev。
 最低宿主：10.0.0；最高声明：10.0.*。后续重新打包可能因 ZIP 时间戳改变而产生不同校验值。
 
-旧包被 Zotero 10.0.1 拒绝的根因已复现并定位：本机 `Extension.sys.mjs` 会把缺少 `applications.zotero.update_url` 的扩展判为无效。当前 0.1.8 已添加该必填字段。本地包使用 IANA 保留的 `.invalid` 域名，明确表示没有自动更新服务；公开发布时必须替换为真实 HTTPS 更新清单。
+旧包被 Zotero 10.0.1 拒绝的根因已复现并定位：本机 `Extension.sys.mjs` 会把缺少 `applications.zotero.update_url` 的扩展判为无效。当前 1.0.0 已添加该必填字段。本地包使用 IANA 保留的 `.invalid` 域名，明确表示没有自动更新服务；公开发布时必须替换为真实 HTTPS 更新清单。
 
 ## 尚未通过实机验收的项目
 

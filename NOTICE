@@ -1,5 +1,24 @@
-Zotero Unified Translator（ZUT）原创代码按 AGPL-3.0-or-later 方向组织。
+# NOTICE
 
-本仓库当前没有直接复制 zotero-pdf-translate 或 zotero-pdf2zh 的源代码。
-正式发布前必须对参考项目、PDF 翻译引擎和 npm/Python 依赖完成许可证审计，
-并在此文件中补充对应的版权和许可证声明。
+Zotero Unified Translator（ZUT）
+
+原创代码按 **AGPL-3.0-or-later** 授权，许可证全文见仓库根目录 [LICENSE](LICENSE)。
+
+## 第三方项目说明
+
+本仓库当前没有直接复制 `zotero-pdf-translate` 或 `zotero-pdf2zh` 的源代码。
+插件与后端在设计与接口层面参考了通用开源实践，参考项目的代码未整体或部分复制进本仓库。
+
+## 依赖
+
+- 插件构建依赖：`typescript`、`esbuild`、`adm-zip`、`@types/node`、`zotero-types`（开发期依赖，不随 XPI 分发）。
+- 插件运行时：仅使用 Zotero 宿主提供的 API，XPI 内不打包第三方运行时库。
+- 后端依赖：见 `server/requirements.txt`，其中 PDF 处理/排版引擎为 `pdf2zh-next 2.9.0`。
+
+## 待办事项
+
+正式对外分发二进制产物之前，仍需完成：
+
+1. 对参考项目、PDF 翻译引擎（`pdf2zh-next`）及 npm / Python 依赖做一次完整的许可证审计；
+2. 按审计结果在此文件中补充对应的版权与许可证声明；
+3. 若后续引入其他开源代码，同步更新本文件。

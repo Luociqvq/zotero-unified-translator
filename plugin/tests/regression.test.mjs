@@ -13,7 +13,7 @@ async function moduleAt(path) {
 test('XPI startup registers Reader, menu and preferences using its supplied sandbox globals', async () => {
   const zip = new AdmZip('.scaffold/build/zotero-unified-translator.xpi');
   const manifest = JSON.parse(zip.readAsText('manifest.json'));
-  assert.equal(manifest.version, '0.1.8');
+  assert.equal(manifest.version, '1.0.0');
   assert.equal(manifest.author, 'Luoci');
   assert.equal(manifest.applications.zotero.strict_min_version, '10.0.0');
   assert.equal(manifest.applications.zotero.strict_max_version, '10.0.*');
@@ -219,4 +219,238 @@ test('XUL controls have Fluent label attributes in both locales', () => {
       assert.match(ftl, new RegExp(name + ' =\\r?\\n    \\.label ='));
     }
   }
+});
+
+function createMockDocument() {
+  const listeners = new Map();
+  const makeEl = (tag) => {
+    const el = {
+      tagName: String(tag).toUpperCase(),
+      nodeType: 1,
+      children: [],
+      parentElement: null,
+      isConnected: false,
+      hidden: false,
+      disabled: false,
+      dataset: {},
+      style: {},
+      textContent: '',
+      className: '',
+      id: '',
+      attributes: new Map(),
+      setAttribute(name, value) { this.attributes.set(name, value); },
+      getAttribute(name) { return this.attributes.get(name) ?? null; },
+      appendChild(child) {
+        child.parentElement = this;
+        child.isConnected = this.isConnected;
+        this.children.push(child);
+        return child;
+      },
+      append(...nodes) {
+        for (const n of nodes) this.appendChild(typeof n === 'string' ? makeEl('span') : n);
+      },
+      remove() {
+        if (this.parentElement) {
+          const i = this.parentElement.children.indexOf(this);
+          if (i >= 0) this.parentElement.children.splice(i, 1);
+        }
+        this.parentElement = null;
+        this.isConnected = false;
+      },
+      contains(node) {
+        if (node === this) return true;
+        return this.children.some((c) => c.contains && c.contains(node));
+      },
+      addEventListener() {},
+      removeEventListener() {},
+      getBoundingClientRect() {
+        return { left: 0, top: 0, right: 200, bottom: 40, width: 200, height: 40, x: 0, y: 0 };
+      },
+      querySelectorAll() { return []; },
+      querySelector() { return null; },
+      select() {},
+    };
+    return el;
+  };
+  const root = makeEl('html');
+  root.isConnected = true;
+  const body = makeEl('body');
+  body.isConnected = true;
+  root.appendChild(body);
+  // Native annotation bar that the plugin should attach under.
+  const bar = makeEl('div');
+  bar.className = 'selection-popup';
+  bar.isConnected = true;
+  bar.getBoundingClientRect = () => ({ left: 100, top: 200, right: 300, bottom: 240, width: 200, height: 40, x: 100, y: 200 });
+  body.appendChild(bar);
+
+  const doc = {
+    documentElement: root,
+    body,
+    defaultView: {
+      innerWidth: 1200,
+      innerHeight: 800,
+      getComputedStyle: (el) => ({ position: el === bar ? 'absolute' : 'static', overflow: 'visible', overflowX: 'visible', overflowY: 'visible' }),
+      requestAnimationFrame: (fn) => { fn(); return 1; },
+      navigator: { clipboard: { writeText: async () => {} } },
+      addEventListener() {},
+      removeEventListener() {},
+    },
+    createElement: (tag) => makeEl(tag),
+    getElementById: (id) => (id === 'zut-popup-style' ? null : null),
+    addEventListener(type, fn) { listeners.set(type, fn); },
+    removeEventListener(type) { listeners.delete(type); },
+    querySelector(selector) {
+      if (selector === '.selection-popup' || selector.includes('selection-popup')) return bar;
+      return null;
+    },
+    querySelectorAll(selector) {
+      if (selector === '.selection-popup' || selector.includes('selection-popup')) return [bar];
+      return [];
+    },
+  };
+  // Keep isConnected in sync when appending into body/bar.
+  const patchAppend = (parent) => {
+    const original = parent.appendChild.bind(parent);
+    parent.appendChild = (child) => {
+      const result = original(child);
+      child.isConnected = true;
+      const sync = (node) => { node.isConnected = true; for (const c of node.children || []) sync(c); };
+      sync(child);
+      return result;
+    };
+  };
+  patchAppend(body);
+  patchAppend(bar);
+  const dismissBar = () => {
+    bar.isConnected = false;
+    bar.getBoundingClientRect = () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0 });
+    doc.querySelector = () => null;
+    doc.querySelectorAll = () => [];
+    const i = body.children.indexOf(bar);
+    if (i >= 0) body.children.splice(i, 1);
+    bar.parentElement = null;
+  };
+  return { doc, bar, body, root, dismissBar };
+}
+
+test('translation popup docks as a fixed card under the native annotation bar', async () => {
+  const { TranslationPopup } = await moduleAt('src/modules/ui/popup.ts');
+  const { doc, bar, body } = createMockDocument();
+  const selection = {
+    reader: {},
+    doc,
+    annotation: { text: 'hello world' },
+    text: 'hello world',
+    sourceLanguage: 'auto',
+    targetLanguage: 'zh-CN',
+    append: () => {
+      throw new Error('append should not be used for the large panel');
+    },
+  };
+  const popup = new TranslationPopup();
+  try {
+    popup.show(selection, {
+      translate: async () => ({ text: '你好世界', provider: 'test', model: 'm', targetLanguage: 'zh-CN', sourceLanguage: 'en' }),
+    });
+    const panel = body.children.find((c) => c.dataset && c.dataset.zutPopup === 'true');
+    assert.ok(panel, 'panel is mounted on the reader document body');
+    assert.equal(panel.dataset.zutMounted, 'dock', 'marks panel as docked under annotation bar');
+    assert.equal(panel.style.position, 'fixed');
+    // Bar rect: left=100, bottom=240 → panel hangs at top=246, left=100.
+    assert.equal(panel.style.top, '246px', 'sits directly below the annotation bar');
+    assert.equal(panel.style.left, '100px', 'left-aligned with the annotation bar');
+    assert.ok(!bar.children.includes(panel), 'panel is not stuffed inside the 198px bar');
+  } finally {
+    popup.dispose();
+  }
+  const leftover = body.children.find((c) => c.dataset && c.dataset.zutPopup === 'true');
+  assert.ok(!leftover, 'panel is removed on dispose');
+});
+
+test('translation popup still docks under the bar when append throws', async () => {
+  const { TranslationPopup } = await moduleAt('src/modules/ui/popup.ts');
+  const { doc, body, bar } = createMockDocument();
+  const selection = {
+    reader: {},
+    doc,
+    annotation: { text: 'hello world' },
+    text: 'hello world',
+    sourceLanguage: 'auto',
+    targetLanguage: 'zh-CN',
+    append: () => { throw new Error('append unavailable'); },
+  };
+  const popup = new TranslationPopup();
+  try {
+    popup.show(selection, {
+      translate: async () => ({ text: '你好世界', provider: 'test', model: 'm', targetLanguage: 'zh-CN', sourceLanguage: 'en' }),
+    });
+    const panel = body.children.find((c) => c.dataset && c.dataset.zutPopup === 'true');
+    assert.ok(panel, 'panel exists');
+    assert.equal(panel.dataset.zutMounted, 'dock');
+    assert.equal(panel.style.position, 'fixed');
+    assert.equal(panel.style.top, '246px');
+    assert.ok(!bar.children.includes(panel));
+  } finally {
+    popup.dispose();
+  }
+});
+
+test('translation popup auto-closes when the native annotation bar disappears', async () => {
+  const { TranslationPopup } = await moduleAt('src/modules/ui/popup.ts');
+  const { doc, body, dismissBar } = createMockDocument();
+  const selection = {
+    reader: {},
+    doc,
+    annotation: { text: 'hello world' },
+    text: 'hello world',
+    sourceLanguage: 'auto',
+    targetLanguage: 'zh-CN',
+    append: () => {},
+  };
+  const popup = new TranslationPopup();
+  popup.show(selection, {
+    translate: async () => ({ text: '你好世界', provider: 'test', model: 'm', targetLanguage: 'zh-CN', sourceLanguage: 'en' }),
+  });
+  const panel = body.children.find((c) => c.dataset && c.dataset.zutPopup === 'true');
+  assert.ok(panel, 'panel opens with the bar');
+  const dockedTop = panel.style.top;
+  const dockedLeft = panel.style.left;
+  dismissBar();
+  // Sync loop ticks every 100ms; close must happen without a jump to center.
+  await new Promise((resolve) => setTimeout(resolve, 180));
+  assert.ok(
+    !body.children.find((c) => c.dataset && c.dataset.zutPopup === 'true'),
+    'panel is removed once the annotation bar is gone',
+  );
+  assert.equal(panel.style.top, dockedTop, 'does not reposition to screen center before close');
+  assert.equal(panel.style.left, dockedLeft, 'left edge stays docked until removal');
+  popup.dispose();
+});
+
+test('translation popup closes when the annotation bar scrolls off-screen', async () => {
+  const { TranslationPopup } = await moduleAt('src/modules/ui/popup.ts');
+  const { doc, body, bar } = createMockDocument();
+  const selection = {
+    reader: {},
+    doc,
+    annotation: { text: 'hello world' },
+    text: 'hello world',
+    sourceLanguage: 'auto',
+    targetLanguage: 'zh-CN',
+    append: () => {},
+  };
+  const popup = new TranslationPopup();
+  popup.show(selection, {
+    translate: async () => ({ text: '你好世界', provider: 'test', model: 'm', targetLanguage: 'zh-CN', sourceLanguage: 'en' }),
+  });
+  assert.ok(body.children.find((c) => c.dataset && c.dataset.zutPopup === 'true'));
+  // Simulate page scroll: bar still in DOM but above the viewport.
+  bar.getBoundingClientRect = () => ({ left: 100, top: -200, right: 300, bottom: -160, width: 200, height: 40, x: 100, y: -200 });
+  await new Promise((resolve) => setTimeout(resolve, 180));
+  assert.ok(
+    !body.children.find((c) => c.dataset && c.dataset.zutPopup === 'true'),
+    'panel closes when the bar leaves the viewport',
+  );
+  popup.dispose();
 });
