@@ -3,5 +3,9 @@
 # otherwise be a footgun for anyone committing one.
 *.sh text eol=lf
 
+# Node scripts either carry a shebang or run under a Linux shell, so keep them
+# LF too; a CRLF shebang line is not honoured.
+*.mjs text eol=lf
+
 # PowerShell scripts only ever run on Windows.
 *.ps1 text eol=crlf

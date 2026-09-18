@@ -110,10 +110,36 @@ sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn \
 3. 从 GitHub Release 下载 `v<版本>` 的 XPI；
 4. **校验下载文件的 sha256 与清单一致**，不一致直接失败退出，不落盘；
 5. 以版本化文件名安装产物（`-<版本>.xpi`），并维护一个指向它的稳定别名 `zotero-unified-translator.xpi`；
-6. 按证书是否存在重新生成 vhost，`nginx -t` 通过后 reload；
-7. 通过 loopback 回读清单，确认对外服务的版本与预期一致。
+6. **最后**才把清单与落地页落盘 —— 见下方"发布顺序"；
+7. 按证书是否存在重新生成 vhost，`nginx -t` 通过后 reload；
+8. 通过 loopback 回读清单，确认对外服务的版本与预期一致。
 
 **顺序必须是「先发 Release，再部署服务器」** —— 脚本从 Release 取产物。
+
+### 发布顺序（不要改回去）
+
+新内容一律先落到临时目录，校验通过后才发布，且**产物在前、清单在后**：
+
+```
+拉清单 → 解析 → 下载产物 → 校验 sha256 → 装产物 → 发布清单与落地页
+```
+
+原因：清单是**客户端唯一读取的东西**（它只读 `updates.json`）。如果清单先上线、产物还没装好，那么所有客户端都会被告知"有新版本"，然后下载失败 —— 而 Zotero 在界面上不会解释原因。
+
+这个 bug 真实发生过一次：GitHub Release 的下载在某些网络下会**建立连接后不传数据**，脚本没有超时，于是卡死在那里；而清单已经发布出去，指向一个那时还不存在的文件。所以：
+
+- 所有网络请求都带 `--connect-timeout 15 --max-time 120`（产物下载 300 秒），**超时即失败退出**，不会无限挂住；
+- 落盘顺序改成产物优先。
+
+### 部署后的自检
+
+在**本机**（不是服务器上）执行，走公网：
+
+```bash
+node scripts/verify-channel.mjs --domain zut.eieu.cn --expect-version 1.0.2
+```
+
+它按客户端的方式把清单跟随到底，任一项不符即以退出码 1 结束。服务器侧的 loopback 回读只能证明 nginx 配置正确，证明不了公网可达、证书有效、CDN 没在发旧内容。
 
 ---
 
@@ -129,6 +155,9 @@ sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn \
 | 更新通道整站 404 | webroot 或 vhost 被面板改动覆盖 | 重跑部署脚本（幂等，会重建） |
 | 部署报"成功"但线上还是上一版 | 用了 `main` 之类的分支 ref，raw CDN 仍在发旧内容 | 改用 tag / commit SHA，并加 `--expect-version` |
 | 执行的脚本行为与仓库不一致 | 取脚本时用了分支 ref，拿到旧文件 | 取脚本也用 commit SHA |
+| 部署长时间无输出，卡在 `downloading …` | GitHub Release 的下载建立连接后不传数据（实测会挂几分钟） | 已加 `--connect-timeout 15 --max-time 300`，超时即失败退出；重跑即可 |
+| 线上清单指向的产物 404 | 部署中途中断，且旧版脚本是"清单先发布、产物后安装" | 已改为产物优先落盘、清单最后发布；重跑部署即可恢复一致 |
+| 公网取到的产物哈希不对 | `updates.json` 里的版本与 `release/` 里的包不是同一版，或客户端缓存 | 跑 `node scripts/verify-channel.mjs`，它会同时报出线上与本地两份的哈希 |
 
 > 站点是通过面板纳管的。**不要手工编辑** `/xp/panel/vhost/nginx/zut.eieu.cn.conf` —— 那份文件每次部署都会重新生成，且面板改动也可能覆盖它。
 > 要改配置，改仓库里的 `scripts/deploy-updates.sh`。

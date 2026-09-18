@@ -97,7 +97,11 @@ trap 'rm -rf "$TMP"' EXIT
 
 fetch() {
   # $1 = repo-relative path, $2 = destination
+  # Bounded on purpose: an unbounded curl against a CDN that accepts the
+  # connection and then stalls will hang the deploy forever, which is worse
+  # than failing. Retries cover the transient case.
   curl -sSL --fail --retry 3 --retry-delay 2 \
+       --connect-timeout 15 --max-time 120 \
        -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
        -o "$2" "${RAW}/$1" || die "failed to fetch $1 from ${REF}"
 }
@@ -138,16 +142,20 @@ newest_version() {
 }
 
 # --------------------------------------------------------------------- 1. files
+# Everything is staged in $TMP and only published in step 4, once the artifact
+# and the manifest have both been fetched and cross-checked. Publishing as we
+# go means a failure halfway leaves the channel describing a file that is not
+# there.
 log "webroot: ${WEBROOT}"
 install -d -m 0755 "$WEBROOT" "$WEBROOT/release"
 
 log "fetching manifest and landing page from ${REPO}@${REF}"
-fetch 'updates.json'           "$WEBROOT/updates.json"
-fetch 'deploy/site/index.html' "$WEBROOT/index.html"
+fetch 'updates.json'           "$TMP/updates.json"
+fetch 'deploy/site/index.html' "$TMP/index.html"
 
 # ------------------------------------------------------------- 2. read manifest
-MANIFEST_META="$(manifest_meta "$WEBROOT/updates.json")" \
-  || die "could not parse ${WEBROOT}/updates.json"
+MANIFEST_META="$(manifest_meta "$TMP/updates.json")" \
+  || die "could not parse the manifest fetched from ${REF}"
 
 read -r VER HASH LINK <<< "$MANIFEST_META"
 
@@ -172,7 +180,9 @@ log "expected sha256 ${HASH}"
 # manifest digest was computed from, so a mismatch here means a broken release.
 SRC="${XPI_URL/__VER__/$VER}"
 log "downloading ${SRC}"
-curl -sSL --fail --retry 3 --retry-delay 2 -o "$TMP/${ARTIFACT}.xpi" "$SRC" \
+curl -sSL --fail --retry 3 --retry-delay 2 \
+     --connect-timeout 15 --max-time 300 \
+     -o "$TMP/${ARTIFACT}.xpi" "$SRC" \
   || die "failed to download the v${VER} XPI from the GitHub release"
 
 ACTUAL="$(sha256sum "$TMP/${ARTIFACT}.xpi" | awk '{print $1}')"
@@ -197,13 +207,22 @@ if [ -n "$LINK" ]; then
   esac
 fi
 
-# ------------------------------------------------------------------- 4. perms
+# ------------------------------------------------------------------- 4. publish
+# The artifact is already in place, so the manifest goes last. That order is the
+# point: a manifest that goes live before the file it names offers every client
+# an upgrade that cannot be downloaded, and Zotero has no way to tell the user
+# why. Getting it backwards once let a stalled download leave the channel
+# advertising a version that was not on disk yet.
+install -m 0644 "$TMP/updates.json" "$WEBROOT/updates.json"
+install -m 0644 "$TMP/index.html"   "$WEBROOT/index.html"
+
+# ------------------------------------------------------------------- 5. perms
 # The panel's nginx worker runs as www; these files only need to be readable.
 chown -R "${WEB_USER}:${WEB_USER}" "$WEBROOT"
 find "$WEBROOT" -type d -exec chmod 0755 {} +
 find "$WEBROOT" -type f -exec chmod 0644 {} +
 
-# ------------------------------------------------------------------- 5. vhost
+# ------------------------------------------------------------------- 6. vhost
 HAS_CERT=0
 if [ -f "${CERT_DIR}/fullchain.pem" ] && [ -f "${CERT_DIR}/privkey.pem" ]; then
   HAS_CERT=1
@@ -334,14 +353,14 @@ EOF
 
 write_vhost
 
-# ------------------------------------------------------------------- 6. reload
+# ------------------------------------------------------------------- 7. reload
 log "testing nginx configuration"
 "$NGINX_BIN" -t -c "$NGINX_CONF" -q || die "nginx configuration test failed; not reloading"
 
 log "reloading nginx"
 "$NGINX_BIN" -s reload -c "$NGINX_CONF"
 
-# --------------------------------------------------------------------- 7. cert
+# --------------------------------------------------------------------- 8. cert
 if [ "$ISSUE_CERT" = "1" ] && [ "$HAS_CERT" = "0" ]; then
   command -v certbot >/dev/null 2>&1 || die "certbot is not installed"
   log "requesting a certificate for ${DOMAIN}"
@@ -358,7 +377,7 @@ if [ "$ISSUE_CERT" = "1" ] && [ "$HAS_CERT" = "0" ]; then
   "$NGINX_BIN" -s reload -c "$NGINX_CONF"
 fi
 
-# ------------------------------------------------------------------- 8. verify
+# ------------------------------------------------------------------- 9. verify
 SCHEME=http
 PORT=80
 if [ "$HAS_CERT" = "1" ]; then

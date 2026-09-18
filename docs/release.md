@@ -171,16 +171,30 @@ sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn \
 
 ## 三、发布后自检
 
-| 检查 | 命令 / 方式 | 期望 |
+一条命令跑完全部线上检查：
+
+```bash
+node scripts/verify-channel.mjs --domain zut.eieu.cn --expect-version 1.0.2
+```
+
+它按**客户端的方式**走一遍：读清单 → 检查 `Cache-Control` → 取 `update_link` 指向的产物 → 比对 sha256 与 `update_hash` → 与本仓库 `release/` 里的文件对比 → 打印证书剩余有效期。**任一项不符即以退出码 1 结束**，可以直接接进 CI。
+
+| 检查 | 期望 |
+|---|---|
+| 清单可访问且是新版 | 200，`version` 为预期版本 |
+| 清单未被缓存 | 响应头含 `no-cache`（缓存住会让 Zotero 静默不再提示更新） |
+| 产物可下载且哈希正确 | 200，sha256 与 `update_hash` 一致 |
+| 产物 MIME | `application/x-xpinstall` |
+| 与本仓库产物 | 逐字节相同 |
+| 证书 | 未过期（剩余不足 14 天会告警） |
+
+剩下一条只能人工做：
+
+| 检查 | 方式 | 期望 |
 |---|---|---|
-| 自建清单可访问且是新版 | `curl -s https://zut.eieu.cn/updates.json` | 返回 JSON，`version` 为新版本 |
-| 自建产物可下载且哈希正确 | `curl -sSLO https://zut.eieu.cn/release/zotero-unified-translator-<版本>.xpi && sha256sum zotero-unified-translator-<版本>.xpi` | 与 `update_hash` 一致 |
-| 清单未被缓存 | `curl -sSI https://zut.eieu.cn/updates.json \| grep -i cache-control` | 含 `no-cache` |
-| GitHub 清单镜像同步 | `curl -s https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json` | 与自建清单内容相同 |
-| 清单 hash 与线上产物一致 | 见上一步第 7 条 | 一致 |
 | 客户端能发现更新 | Zotero「工具 → 插件」齿轮 →「检查更新」 | 提示有新版本 |
 
-> `raw.githubusercontent.com` 有 CDN 缓存。推送后若立刻取到旧内容，等 1–5 分钟再试（可在 URL 后加 `?t=<时间戳>` 绕过缓存验证）。自建通道同理，但脚本已经带了 `no-cache` 头，一般即时生效。
+> `raw.githubusercontent.com` 有 CDN 缓存，推送后若立刻取到旧内容，等 1–5 分钟再试。自建通道不受此影响（脚本已带 `no-cache` 头）。
 
 ---
 
@@ -198,6 +212,8 @@ sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn \
 | 提示有更新、下载后却安装失败 | XPI 用了固定文件名，命中了上一版的缓存 | 用带版本号的文件名；本项目服务器即按此约定托管 |
 | 部署脚本报 `digest mismatch` | Release 里的产物与清单 hash 不符，或还没发 Release | 先完成第 6 步，确认第 7 步 digest 与清单一致后再部署 |
 | 部署"成功"了，但线上还是上一版 | 用了 `--ref main`，raw CDN 仍在发旧内容 | 改用 tag 或 commit SHA，并带 `--expect-version`（见第 8 步） |
+| 部署卡在 `downloading ...` 长时间无输出 | GitHub Release 的下载在某些网络下会挂住（连接建立但不传数据） | 已加 `--connect-timeout 15 --max-time 300`，超时即失败退出，不会挂死；重跑即可 |
+| 线上清单指向的产物 404 | 部署脚本先发布清单、后安装产物，中途中断就会留下这个状态 | 已改为**产物先落盘、清单最后发布**；遇到该状态重跑部署即可恢复 |
 
 ---
 
