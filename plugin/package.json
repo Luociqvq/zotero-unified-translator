@@ -1,6 +1,6 @@
 {
   "name": "zotero-unified-translator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Instant and full-document translation for Zotero",
   "type": "module",
@@ -10,7 +10,7 @@
     "addonRef": "zut",
     "addonInstance": "ZoteroUnifiedTranslator",
     "prefsPrefix": "extensions.zut",
-    "updateURL": "https://updates.zut.invalid/updates.json"
+    "updateURL": "https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json"
   },
   "author": "Luoci",
   "license": "AGPL-3.0-or-later",

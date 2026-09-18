@@ -1,7 +1,7 @@
 # Zotero Unified Translator（ZUT）
 
 <p>
-  <img alt="version" src="https://img.shields.io/badge/version-1.0.0-blue">
+  <img alt="version" src="https://img.shields.io/badge/version-1.0.1-blue">
   <img alt="zotero" src="https://img.shields.io/badge/Zotero-10.0.x-CC2936">
   <img alt="license" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-green">
 </p>
@@ -158,7 +158,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-backend.p
 
 | 现象 | 处理 |
 |---|---|
-| 提示不兼容 / 无法安装 | 确认装的是本仓库 release 中的 1.0.0 包；关掉旧安装对话框后重新选择 XPI |
+| 提示不兼容 / 无法安装 | 确认装的是本仓库 release 中的 1.0.1 包；关掉旧安装对话框后重新选择 XPI；老版本（≤1.0.0）请手动安装 1.0.1 一次 |
 | 设置里找不到插件入口 | 到「编辑 → 设置」**左侧列表**找插件名；确认插件已启用，必要时重启 |
 | 划词翻译失败 | 检查接口地址（是否含 `/v1`）、模型名与 API Key；点「测试即时翻译」看具体错误 |
 | 提示 `valid Bearer API key is required` | 接口已连通但没填有效 Key，在设置页填好并保存 |
@@ -194,14 +194,15 @@ server\.venv\Scripts\python.exe -m zut_server.cleanup
 ## 项目结构
 
 ```
-plugin/     Zotero 插件源码、资源、构建与回归测试（TypeScript + esbuild）
-server/     ZUT 后端：API、SQLite、Worker、引擎适配器（Python / FastAPI）
-scripts/    Windows 下的安装、启动、停止与打包脚本
-docs/       API 契约、部署说明、功能说明、验收记录
-release/    供安装的 XPI 产物
+plugin/       Zotero 插件源码、资源、构建与回归测试（TypeScript + esbuild）
+server/       ZUT 后端：API、SQLite、Worker、引擎适配器（Python / FastAPI）
+scripts/      Windows 下的安装、启动、停止、打包脚本，以及更新清单校验
+docs/         API 契约、部署说明、功能说明、验收清单与记录、发版流程
+release/      供安装的 XPI 产物
+updates.json  Zotero 读取的自动更新清单
 ```
 
-后端 API 契约见 [docs/api-v1.md](docs/api-v1.md)，部署细节见 [docs/deployment.md](docs/deployment.md)，功能细节见 [docs/ZUT功能说明.md](docs/ZUT功能说明.md)。
+文档入口见下方 [文档](#文档) 一节。
 
 ---
 
@@ -224,7 +225,9 @@ npm test          # 回归测试
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-plugin.ps1
 ```
 
-> Zotero 10 要求清单里必须存在 `applications.zotero.update_url`。本地发行包默认使用保留域名 `https://updates.zut.invalid/updates.json` 作为**不可解析的占位地址**，因此不会获得自动更新。需要自动更新时，用环境变量 `ZUT_UPDATE_URL` 传入真实的 HTTPS 更新清单地址后再构建。
+> Zotero 10 要求清单里必须存在 `applications.zotero.update_url`，且**只有该字段指向真实清单地址时才会检查更新**。
+> 本仓库构建出的包默认指向 `updates.json` 的线上地址（`ZUT_UPDATE_URL` 环境变量可覆盖）。仓库根目录的 `updates.json` 是给 Zotero 读的更新清单，改版本后必须同步更新，否则自动更新会静默失效 —— `scripts/package-plugin.ps1` 末尾会自动调用 `scripts/verify-updates.mjs` 拦截这类不一致。
+> 完整的发版流程见 [发版与自动更新维护](docs/release.md)。
 
 ### 后端
 
@@ -240,17 +243,40 @@ Set-Location server
 
 ## 版本与兼容性
 
-- 当前版本：**1.0.0**
+- 当前版本：**1.0.1**
 - 宿主声明：最低 `10.0.0`，最高 `10.0.*`（这不是对 10.1 或未来版本的兼容承诺）
 - 已针对 Zotero **10.0.1** 做隔离档案下的清单识别与兼容性判定，插件启动注册由自动化回归测试覆盖
-- PDF 阅读器的人工交互与真实 LLM 翻译质量仍需你在本机实测，详见 [验收记录](docs/verification.md)
+- PDF 阅读器的人工交互与真实 LLM 翻译质量仍需你在本机实测，详见 [验收记录](docs/verification.md) 与 [人工验收清单](docs/acceptance-checklist.md)
 
-**尚未实现**：批量翻译界面、逐句连续翻译、多服务并排对比、标题摘要翻译、OCR、快捷键配置、插件内任务历史 / 取消按钮、自动更新发布站点、多用户后端。
+### 升级
+
+**1.0.1 起已接入自动更新。** Zotero 会通过仓库根目录的 [`updates.json`](updates.json) 检查新版本并自动升级；在「工具 → 插件」齿轮菜单里也能手动触发「检查更新」。
+
+> ⚠️ **如果你装的是 1.0.0 或更早版本，不会收到自动更新提示** —— 那些版本的清单里填的是占位地址。请手动安装一次 1.0.1，之后自动更新才会生效。
+
+**尚未实现**：批量翻译界面、逐句连续翻译、多服务并排对比、标题摘要翻译、OCR、快捷键配置、插件内任务历史 / 取消按钮、多用户后端。
+
+---
+
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [功能说明](docs/ZUT功能说明.md) | 每个功能的详细行为与限制 |
+| [部署说明](docs/deployment.md) | 后端部署细节 |
+| [API 契约](docs/api-v1.md) | 后端 HTTP 接口 |
+| [人工验收清单](docs/acceptance-checklist.md) | 可勾选的本机验收步骤 |
+| [验收记录](docs/verification.md) | 各版本验证结论与产物校验值 |
+| [发版与自动更新维护](docs/release.md) | 发布流程与更新清单维护 |
+| [第三方依赖与许可证](THIRD-PARTY.md) | 逐项依赖许可清单 |
+| [NOTICE](NOTICE) | 第三方组件与参考项目声明 |
 
 ---
 
 ## 许可证
 
-本项目以 **AGPL-3.0-or-later** 授权，全文见 [LICENSE](LICENSE)。第三方项目与依赖说明见 [NOTICE](NOTICE)。
+本项目以 **AGPL-3.0-or-later** 授权，全文见 [LICENSE](LICENSE)。
+
+后端依赖中包含 AGPL-3.0 组件（`pdf2zh-next`、`babeldoc`、`PyMuPDF`）。**若打算闭源或商业托管后端，请先阅读 [THIRD-PARTY.md](THIRD-PARTY.md) 第 4 节** —— AGPL 第 13 条会要求你向网络服务使用者提供源码，PyMuPDF 闭源商用还需购买 Artifex 商业许可。
 
 作者：Luoci

@@ -9,6 +9,7 @@ $buildRoot = Join-Path $pluginRoot ".scaffold\build"
 $xpi = Join-Path $buildRoot "zotero-unified-translator.xpi"
 $releaseRoot = Join-Path $repositoryRoot "release"
 $releaseXpi = Join-Path $releaseRoot "zotero-unified-translator.xpi"
+$verifyScript = Join-Path $repositoryRoot "scripts\verify-updates.mjs"
 
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   throw "Node.js/npm is required to build the Zotero plugin."
@@ -34,3 +35,19 @@ New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
 Copy-Item -LiteralPath $xpi -Destination $releaseXpi -Force
 Write-Host "XPI ready: $releaseXpi"
 Write-Host "Install it from Zotero: Tools -> Plugins -> gear -> Install Plugin From File."
+
+# A stale updates.json does not fail loudly in production: Zotero simply never
+# offers the new version. Catch the mismatch here instead of after publishing.
+if (Test-Path -LiteralPath $verifyScript) {
+  Push-Location $repositoryRoot
+  try {
+    node $verifyScript
+    if ($LASTEXITCODE -ne 0) {
+      throw "updates.json does not match the built XPI. Fix updates.json before releasing."
+    }
+  } finally {
+    Pop-Location
+  }
+} else {
+  Write-Warning "scripts\verify-updates.mjs not found; skipping updates.json verification."
+}

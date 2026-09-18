@@ -1,13 +1,56 @@
-# ZUT 1.0.0 验收记录
+# ZUT 验收记录
 
-日期：2026-09-08。目标宿主：Zotero 10.0.1；本次自动化运行环境：Windows、Python 3.12.10、PowerShell 5.1。
+本文件记录各版本的验证结论与产物校验值。**仍需人工执行**的项目见 [人工验收清单](acceptance-checklist.md)。
 
-## 已通过
+---
+
+## v1.0.1（2026-09-18）
+
+**本轮变更**：仅把插件清单的 `update_url` 从占位域名改为真实更新清单地址，并重建产物。插件功能代码与 v1.0.0 逐字节相同；后端代码未改动（仅 `pyproject.toml` 版本号跟随）。
+
+本轮**实际执行**的检查：
+
+| 检查 | 结果 |
+|---|---|
+| TypeScript 严格类型检查 | 通过 |
+| XPI 构建 | 通过，产物 32,597 字节 |
+| 插件回归测试 | **13/13 通过** |
+| XPI 内 manifest 校验 | 通过：版本 1.0.1、ID `zotero-unified-translator@zut.dev`、`update_url` 为真实 HTTPS 清单地址 |
+| 更新清单一致性校验（`scripts/verify-updates.mjs`） | 通过：清单条目与产物版本一致，`update_hash` 与产物 sha256 相符 |
+| 默认翻译接口连通性 | 通过：`https://fanyi.eieu.cn/v1` 无 Key 请求返回 `HTTP 401 {"error":{"message":"A valid Bearer API key is required."}}`，与插件展示的错误串一致 |
+| 依赖许可证审计 | 完成，结论与逐项清单见 [THIRD-PARTY.md](../THIRD-PARTY.md) |
+
+### 安装产物
+
+| 项目 | 值 |
+|---|---|
+| 文件 | `release/zotero-unified-translator.xpi` |
+| 大小 | 32,597 字节 |
+| SHA-256 | `00e0a8179efe0fb49f49ca8d0144a2424314f5d9edce3fe53579949c1da661e2` |
+| 版本 | 1.0.1 |
+| 作者 / ID | Luoci / `zotero-unified-translator@zut.dev` |
+| 宿主范围 | 最低 10.0.0，最高声明 10.0.* |
+
+### 关于 `update_url`（修正 v1.0.0 记录）
+
+- **v1.0.0 及更早**：清单中的 `update_url` 使用 IANA 保留域名 `.invalid` 作不可解析占位，**不会自动更新**。
+- **v1.0.1 起**：改为 `https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json`，接入自动更新。
+- **影响**：已安装 v1.0.0 的用户**不会**收到自动更新提示，需手动安装一次 v1.0.1；此后自动更新才生效。
+- 自动更新链路本身（Zotero 端实际发现并升级）属于人工验收项，见清单 A5。
+
+---
+
+## v1.0.0（2026-09-08，首验）
+
+> 下表为当时的验证结果，本轮未重跑。第 11 行为当时记录值（9 项），后续版本已扩充到 13 项。
+> 其中「安装产物」一节的校验值在 2026-09-18 已按实际提交产物修正（原记录误填了 v0.1.8 的数值）。
+
+### 已通过
 
 | 检查 | 结果 |
 |---|---|
 | TypeScript 严格类型检查及 XPI 构建 | 通过 |
-| 插件回归测试 | 9/9 通过 |
+| 插件回归测试 | 9/9 通过（当时） |
 | Python 后端测试 | 7/7 通过，包含真实 pdf2zh-next 配置模型验证 |
 | Python 依赖一致性 | pip check 无冲突 |
 | npm 依赖审计 | 0 个已报告漏洞（本次安装时结果） |
@@ -19,35 +62,46 @@
 | 插件图标资源 | 通过，48×48 与 96×96 PNG 均为 RGBA，透明背景已保留 |
 | 即时/整篇服务配置隔离 | 通过，插件默认即时服务为 `fanyi.eieu.cn`，整篇服务使用独立 ZUT 后端地址；后端 LLM 配置不复用插件即时配置 |
 | 默认翻译接口连通性 | 通过，`https://fanyi.eieu.cn/` 与 `/health` 返回服务状态；未提供 Key 的翻译请求按预期返回 401 |
-| 真实 Zotero 10.0.1 隔离启动 | 通过，当前 1.0.0 XPI 被识别为兼容、appDisabled=false；直接放入 profile extensions 目录时宿主默认 userDisabled=true |
-| 插件 startup | 通过，当前 XPI 在模拟宿主中确认 Reader、菜单和设置注册；真实宿主的兼容性判定已通过 |
+| 真实 Zotero 10.0.1 隔离启动 | 通过，当时 XPI 被识别为兼容、appDisabled=false；直接放入 profile extensions 目录时宿主默认 userDisabled=true |
+| 插件 startup | 通过，XPI 在模拟宿主中确认 Reader、菜单和设置注册；真实宿主的兼容性判定已通过 |
 
-插件回归在 Node 模拟宿主中加载实际 XPI 的 bootstrap 与脚本，并检查 Reader、菜单和设置注册；它不是 Zotero GUI 测试。其余回归验证现代凭据接口、PDF 二进制读写、保留最新评论与去重、下载同源校验、XUL 标签。
+插件回归在 Node 模拟宿主中加载实际 XPI 的 bootstrap 与脚本，并检查 Reader、菜单和设置注册；**它不是 Zotero GUI 测试**。其余回归验证现代凭据接口、PDF 二进制读写、保留最新评论与去重、下载同源校验、XUL 标签。
 
 后端测试的引擎配置使用真实已安装的 pdf2zh-next 2.9.0，但翻译事件用模拟流替代。没有调用真实付费模型。测试期间第三方 PyMuPDF 模块产生 5 条弃用警告，不影响测试通过。
 
-## 安装产物
+### 安装产物（2026-09-18 修正）
 
-文件：release/zotero-unified-translator.xpi；大小：29,456 字节。
+| 项目 | 值 |
+|---|---|
+| 文件 | `release/zotero-unified-translator.xpi`（对应 tag `v1.0.0`） |
+| 大小 | 32,576 字节 |
+| SHA-256 | `556f0cf1792a465cb5e8ce171168b2e7e626adb8facf2d3501a76bd3e3f2bdcd` |
+| 版本 | 1.0.0 |
 
-SHA-256：
+> 原记录填写的 29,456 字节 / `B9CC8BEE…` 实为 v0.1.8 产物的数值，已修正。
+> 上述 SHA-256 与 GitHub Release `v1.0.0` 资产报告的 digest 一致，说明 Release 附件与本地产物逐字节相同。
 
-~~~text
-B9CC8BEEC89BF17D8CEB0772DB84B142A15CBAB40F8B4608835995AC49F1EC0D
-~~~
+### 历史根因记录
 
-版本：1.0.0；作者：Luoci；ID：zotero-unified-translator@zut.dev。
-最低宿主：10.0.0；最高声明：10.0.*。后续重新打包可能因 ZIP 时间戳改变而产生不同校验值。
+旧包被 Zotero 10.0.1 拒绝的根因已复现并定位：本机 `Extension.sys.mjs` 会把缺少 `applications.zotero.update_url` 的扩展判为无效。v1.0.0 已补齐该必填字段（当时填的是 `.invalid` 占位地址，v1.0.1 换成真实清单地址）。
 
-旧包被 Zotero 10.0.1 拒绝的根因已复现并定位：本机 `Extension.sys.mjs` 会把缺少 `applications.zotero.update_url` 的扩展判为无效。当前 1.0.0 已添加该必填字段。本地包使用 IANA 保留的 `.invalid` 域名，明确表示没有自动更新服务；公开发布时必须替换为真实 HTTPS 更新清单。
+---
 
 ## 尚未通过实机验收的项目
 
-- 通过 Zotero 图形界面手动执行“从文件安装”、禁用、启用、重启及设置控件操作；当前已完成真实宿主清单识别与兼容性判定，GUI 全流程仍需用户验收。
-- 在真实 PDF Reader 中划词、复制、保存注释和导入译文。
-- 真实模型 Key、联网字体/布局资源、真实 PDF 翻译质量。
-- `fanyi.eieu.cn` 的真实译文返回；当前没有把 API Key 写入测试环境，因此只验证了接口连通性和鉴权行为。
-- Docker 镜像构建及容器端到端运行；当前环境无 Docker 命令。
-- macOS/Linux 宿主兼容性、复杂 PDF 样本及公开发行许可审核。
+以下项目**自动化无法覆盖**，需要在真实 Zotero + 真实 Key 下人工执行。逐条步骤与判定标准见 **[人工验收清单](acceptance-checklist.md)**：
 
-因此本产物应称为“可安装验收版本”，不能称为“全部功能已在 Zotero 10.0.1 实测通过”。下一步由用户在真实 PDF Reader 中验收划词及设置，再接入真实 LLM 做整篇 PDF 验收。
+- 通过 Zotero 图形界面手动执行「从文件安装」、禁用、启用、重启及设置控件操作。
+- 在真实 PDF Reader 中划词、复制、保存注释和导入译文；弹窗停靠位置与自动收起行为。
+- 真实模型 Key 下的译文质量、联网字体/布局资源、复杂 PDF 的版式还原。
+- `fanyi.eieu.cn` 的真实译文返回（当前只验证了接口连通性与鉴权行为）。
+- 整篇 PDF 链路：真实后端、真实 LLM、输出附件导入与去重。
+- **自动更新链路**：Zotero 实际发现并升级到新版本。
+- Docker 镜像构建及容器端到端运行（当前环境无 Docker 命令）。
+- macOS / Linux 宿主兼容性。
+
+**已完成**（从原待办移出）：
+
+- ✅ 依赖与第三方许可证审计 —— 2026-09-18 完成，见 [THIRD-PARTY.md](../THIRD-PARTY.md)。
+
+因此当前产物应称为「可安装验收版本」，不能称为「全部功能已在 Zotero 10.0.1 实测通过」。请按 [人工验收清单](acceptance-checklist.md) 逐条跑完后回填本节。

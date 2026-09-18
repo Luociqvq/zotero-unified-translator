@@ -4,21 +4,24 @@ Zotero Unified Translator（ZUT）
 
 原创代码按 **AGPL-3.0-or-later** 授权，许可证全文见仓库根目录 [LICENSE](LICENSE)。
 
-## 第三方项目说明
+## 第三方组件
 
-本仓库当前没有直接复制 `zotero-pdf-translate` 或 `zotero-pdf2zh` 的源代码。
-插件与后端在设计与接口层面参考了通用开源实践，参考项目的代码未整体或部分复制进本仓库。
+完整的依赖与许可证清单见 [THIRD-PARTY.md](THIRD-PARTY.md)（审计日期 2026-09-18）。
 
-## 依赖
+要点：
 
-- 插件构建依赖：`typescript`、`esbuild`、`adm-zip`、`@types/node`、`zotero-types`（开发期依赖，不随 XPI 分发）。
-- 插件运行时：仅使用 Zotero 宿主提供的 API，XPI 内不打包第三方运行时库。
-- 后端依赖：见 `server/requirements.txt`，其中 PDF 处理/排版引擎为 `pdf2zh-next 2.9.0`。
+- **插件 XPI 不含任何第三方运行时代码**。`plugin/src` 只使用相对路径 import，运行时仅调用 Zotero 宿主 API；构建期依赖（TypeScript、esbuild、adm-zip 等）均为宽松许可且不进入分发包。
+- **后端存在三个 AGPL-3.0 组件**：`pdf2zh-next`、`babeldoc`、`PyMuPDF`（后者为 AGPL-3.0 或 Artifex 商业许可双授权）。
+- 本项目自身为 AGPL-3.0-or-later，与上述组件条款兼容；AGPL 第 13 条要求的网络服务源码可得性由本公开仓库满足。
+- 如需**闭源或商业托管**后端，必须先替换上述 AGPL 组件或另行取得授权；PyMuPDF 闭源商用需购买 Artifex 商业许可。
+- `tqdm` 采用 MPL-2.0（文件级弱 copyleft），本项目未修改其源文件。
+
+## 参考项目
+
+本仓库**没有**直接复制 `zotero-pdf-translate` 或 `zotero-pdf2zh` 的源代码。插件与后端在设计与接口层面参考了通用开源实践，参考项目的代码未整体或部分复制进本仓库。
 
 ## 待办事项
 
-正式对外分发二进制产物之前，仍需完成：
-
-1. 对参考项目、PDF 翻译引擎（`pdf2zh-next`）及 npm / Python 依赖做一次完整的许可证审计；
-2. 按审计结果在此文件中补充对应的版权与许可证声明；
-3. 若后续引入其他开源代码，同步更新本文件。
+1. 生成覆盖全部传递依赖的完整 SBOM 并并入 [THIRD-PARTY.md](THIRD-PARTY.md) 第 5 节（方法已在该节给出）。
+2. 若未来改为分发后端二进制产物，需随包附带 AGPL / MPL 等组件的许可证全文。
+3. 若后续引入其他开源代码，同步更新本文件与 THIRD-PARTY.md。
