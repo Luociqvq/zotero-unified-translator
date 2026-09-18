@@ -4,6 +4,65 @@
 
 ---
 
+## v1.0.2（2026-09-18）
+
+**本轮变更**：把插件清单的 `update_url` 从 GitHub raw 镜像改为项目自建更新通道 `https://zut.eieu.cn/updates.json`，并在自有服务器上部署该通道（nginx 静态托管 + Let's Encrypt 证书）。插件功能代码与 v1.0.1 逐字节相同；后端代码未改动（仅 `pyproject.toml` 版本号跟随）。
+
+本轮**实际执行**的检查：
+
+| 检查 | 结果 |
+|---|---|
+| TypeScript 严格类型检查 | 通过 |
+| XPI 构建 | 通过，产物 32,575 字节 |
+| 插件回归测试 | **13/13 通过**（新增一条断言：`update_url` 的 host 必须是自建通道域名） |
+| XPI 内 manifest 校验 | 通过：版本 1.0.2、ID `zotero-unified-translator@zut.dev`、`update_url` = `https://zut.eieu.cn/updates.json` |
+| 更新清单一致性校验（`scripts/verify-updates.mjs`） | 通过：清单版本与产物一致，`update_hash` 与产物 sha256 相符 |
+| DNS 解析 | 通过：`zut.eieu.cn` 解析到 154.202.118.93，已由 8.8.8.8 / 1.1.1.1 / 223.5.5.5 三处公共解析器确认 |
+| TLS 证书签发 | 通过：Let's Encrypt `zut.eieu.cn`（SAN 仅该域名），有效期至 **2026-12-17**，已纳入 `certbot.timer` 自动续期 |
+| ACME HTTP-01 挑战路径 | 通过：webroot 测试文件经公网 80 端口取回 200 |
+| 公网端到端（从本机发起，非服务器自测） | 通过，见下表 |
+| 依赖许可证审计 | 与 v1.0.1 相同，本轮未新增依赖，见 [THIRD-PARTY.md](../THIRD-PARTY.md) |
+
+### 自建更新通道的公网实测（2026-09-18）
+
+| 路径 | 结果 |
+|---|---|
+| `GET https://zut.eieu.cn/updates.json` | 200，`application/json`，615 字节，`Cache-Control: no-cache, must-revalidate`，`Access-Control-Allow-Origin: *` |
+| `GET https://zut.eieu.cn/release/zotero-unified-translator-1.0.2.xpi` | 200，32,575 字节，`application/x-xpinstall`，`Cache-Control: public, max-age=31536000, immutable` |
+| 产物 sha256 与清单 `update_hash` | **一致**（`sha256:664836cd98f6a71f93e7b9c139e3be14aad40051dc5732058a8a2c715f9597da`） |
+| 公网下载的产物与仓库 `release/` 内文件 | **逐字节相同** |
+| `GET http://zut.eieu.cn/` | 301 跳转到 HTTPS（`/.well-known/acme-challenge/` 例外，保留明文以便续期） |
+| 站点根目录 | `/xp/www/zut.eieu.cn/`，vhost `/xp/panel/vhost/nginx/zut.eieu.cn.conf` |
+| 部署脚本幂等性 | 通过：重复执行结果一致，全流程约 1.4 秒；校验不通过即失败退出，不会发布不一致内容 |
+
+### 安装产物
+
+| 项目 | 值 |
+|---|---|
+| 文件 | `release/zotero-unified-translator.xpi` |
+| 大小 | 32,575 字节 |
+| SHA-256 | `664836cd98f6a71f93e7b9c139e3be14aad40051dc5732058a8a2c715f9597da` |
+| 版本 | 1.0.2 |
+| 作者 / ID | Luoci / `zotero-unified-translator@zut.dev` |
+| 宿主范围 | 最低 10.0.0，最高声明 10.0.* |
+
+### 更新通道的版本演进
+
+| 版本 | 内嵌 `update_url` | 能否自动更新 |
+|---|---|---|
+| ≤ 1.0.0 | `https://updates.zut.invalid/updates.json`（IANA 保留域名占位） | **否**，必须手动安装 |
+| 1.0.1 | `https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json` | 能（GitHub 镜像） |
+| 1.0.2 起 | `https://zut.eieu.cn/updates.json`（自建通道） | 能 |
+
+服务端维护方式见 [更新通道部署](deployment-updates.md)，发版流程见 [发版与自动更新维护](release.md)。
+
+### 本轮**未**验证的项目
+
+- **Zotero 客户端实际发现并升级到 1.0.2**：需要真实 Zotero 操作，见人工验收清单 A4。上面所有链路检查（清单可读、产物可取、哈希相符、响应头正确）都只是**必要条件**，最终结论以 A4 为准。
+- PDF 阅读器的人工交互与真实 LLM 翻译质量：同 v1.0.1，仍待人工验收。
+
+---
+
 ## v1.0.1（2026-09-18）
 
 **本轮变更**：仅把插件清单的 `update_url` 从占位域名改为真实更新清单地址，并重建产物。插件功能代码与 v1.0.0 逐字节相同；后端代码未改动（仅 `pyproject.toml` 版本号跟随）。
@@ -36,7 +95,8 @@
 - **v1.0.0 及更早**：清单中的 `update_url` 使用 IANA 保留域名 `.invalid` 作不可解析占位，**不会自动更新**。
 - **v1.0.1 起**：改为 `https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json`，接入自动更新。
 - **影响**：已安装 v1.0.0 的用户**不会**收到自动更新提示，需手动安装一次 v1.0.1；此后自动更新才生效。
-- 自动更新链路本身（Zotero 端实际发现并升级）属于人工验收项，见清单 A5。
+- 自动更新链路本身（Zotero 端实际发现并升级）属于人工验收项，见清单 A4。
+- 该地址已在 **v1.0.2** 中替换为自建通道，见上文 v1.0.2 一节。
 
 ---
 

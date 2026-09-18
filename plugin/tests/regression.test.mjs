@@ -13,7 +13,7 @@ async function moduleAt(path) {
 test('XPI startup registers Reader, menu and preferences using its supplied sandbox globals', async () => {
   const zip = new AdmZip('.scaffold/build/zotero-unified-translator.xpi');
   const manifest = JSON.parse(zip.readAsText('manifest.json'));
-  assert.equal(manifest.version, '1.0.1');
+  assert.equal(manifest.version, '1.0.2');
   assert.equal(manifest.author, 'Luoci');
   assert.equal(manifest.applications.zotero.strict_min_version, '10.0.0');
   assert.equal(manifest.applications.zotero.strict_max_version, '10.0.*');
@@ -21,12 +21,17 @@ test('XPI startup registers Reader, menu and preferences using its supplied sand
   // update_url, so a regression back to a placeholder domain silently disables
   // auto-update for every installed copy.
   const updateURL = manifest.applications.zotero.update_url;
-  assert.equal(
-    updateURL,
-    'https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json',
-  );
+  assert.equal(updateURL, 'https://zut.eieu.cn/updates.json');
   assert.ok(updateURL.startsWith('https:'), 'update_url must be HTTPS');
   assert.ok(!/\.invalid(\/|$)/.test(updateURL), 'update_url must not be a reserved placeholder domain');
+  // The channel is run by this project. Pointing update_url back at a host we
+  // do not control means someone else's outage, rate limit or policy change
+  // decides whether users get patches.
+  assert.equal(
+    new URL(updateURL).host,
+    'zut.eieu.cn',
+    'update_url must use the project-run update channel host',
+  );
   assert.ok(zip.readFile('content/icons/zut-icon-48.png').length > 100);
   assert.ok(zip.readFile('content/icons/zut-icon-96.png').length > 100);
   const calls = [];

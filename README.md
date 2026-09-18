@@ -1,7 +1,7 @@
 # Zotero Unified Translator（ZUT）
 
 <p>
-  <img alt="version" src="https://img.shields.io/badge/version-1.0.1-blue">
+  <img alt="version" src="https://img.shields.io/badge/version-1.0.2-blue">
   <img alt="zotero" src="https://img.shields.io/badge/Zotero-10.0.x-CC2936">
   <img alt="license" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-green">
 </p>
@@ -158,7 +158,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-backend.p
 
 | 现象 | 处理 |
 |---|---|
-| 提示不兼容 / 无法安装 | 确认装的是本仓库 release 中的 1.0.1 包；关掉旧安装对话框后重新选择 XPI；老版本（≤1.0.0）请手动安装 1.0.1 一次 |
+| 提示不兼容 / 无法安装 | 确认装的是本仓库 release 中的 1.0.2 包；关掉旧安装对话框后重新选择 XPI；老版本（≤1.0.0）请手动安装一次，之后才会自动更新 |
 | 设置里找不到插件入口 | 到「编辑 → 设置」**左侧列表**找插件名；确认插件已启用，必要时重启 |
 | 划词翻译失败 | 检查接口地址（是否含 `/v1`）、模型名与 API Key；点「测试即时翻译」看具体错误 |
 | 提示 `valid Bearer API key is required` | 接口已连通但没填有效 Key，在设置页填好并保存 |
@@ -227,7 +227,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-plugin
 ```
 
 > Zotero 10 要求清单里必须存在 `applications.zotero.update_url`，且**只有该字段指向真实清单地址时才会检查更新**。
-> 本仓库构建出的包默认指向 `updates.json` 的线上地址（`ZUT_UPDATE_URL` 环境变量可覆盖）。仓库根目录的 `updates.json` 是给 Zotero 读的更新清单，改版本后必须同步更新，否则自动更新会静默失效 —— `scripts/package-plugin.ps1` 末尾会自动调用 `scripts/verify-updates.mjs` 拦截这类不一致。
+> 本仓库构建出的包默认指向自建通道 `https://zut.eieu.cn/updates.json`（`ZUT_UPDATE_URL` 环境变量可覆盖，本地或 fork 构建时用它指向自己的清单）。仓库根目录的 `updates.json` 是给 Zotero 读的更新清单，改版本后必须同步更新，否则自动更新会静默失效 —— `scripts/package-plugin.ps1` 末尾会自动调用 `scripts/verify-updates.mjs` 拦截这类不一致。
 > 完整的发版流程见 [发版与自动更新维护](docs/release.md)。
 
 ### 后端
@@ -244,16 +244,24 @@ Set-Location server
 
 ## 版本与兼容性
 
-- 当前版本：**1.0.1**
+- 当前版本：**1.0.2**
 - 宿主声明：最低 `10.0.0`，最高 `10.0.*`（这不是对 10.1 或未来版本的兼容承诺）
 - 已针对 Zotero **10.0.1** 做隔离档案下的清单识别与兼容性判定，插件启动注册由自动化回归测试覆盖
 - PDF 阅读器的人工交互与真实 LLM 翻译质量仍需你在本机实测，详见 [验收记录](docs/verification.md) 与 [人工验收清单](docs/acceptance-checklist.md)
 
 ### 升级
 
-**1.0.1 起已接入自动更新。** Zotero 会通过仓库根目录的 [`updates.json`](updates.json) 检查新版本并自动升级；在「工具 → 插件」齿轮菜单里也能手动触发「检查更新」。
+**1.0.1 起已接入自动更新**，**1.0.2 起更新源改为本项目自建的通道**：
 
-> ⚠️ **如果你装的是 1.0.0 或更早版本，不会收到自动更新提示** —— 那些版本的清单里填的是占位地址。请手动安装一次 1.0.1，之后自动更新才会生效。
+```
+https://zut.eieu.cn/updates.json
+```
+
+Zotero 会定期读取这份清单并自动升级；在「工具 → 插件」齿轮菜单里也能手动触发「检查更新」。
+
+> ⚠️ **如果你装的是 1.0.0 或更早版本，不会收到自动更新提示** —— 那些版本的清单里填的是不可解析的占位地址。请手动安装一次 1.0.1 或更新版本，之后自动更新才会生效。
+
+清单与产物的维护方式见 [发版与自动更新维护](docs/release.md)，自建通道的部署与排障见 [更新通道部署](docs/deployment-updates.md)。
 
 **尚未实现**：批量翻译界面、逐句连续翻译、多服务并排对比、标题摘要翻译、OCR、快捷键配置、插件内任务历史 / 取消按钮、多用户后端。
 

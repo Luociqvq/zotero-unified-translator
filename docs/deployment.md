@@ -1,6 +1,6 @@
 # ZUT 部署说明
 
-目标 Zotero 10.0.1，插件/后端 1.0.1。最短安装与操作流程见 [README](../README.md)。
+目标 Zotero 10.0.1，插件/后端 1.0.2。最短安装与操作流程见 [README](../README.md)。
 
 ## Docker 远程部署（推荐）
 
