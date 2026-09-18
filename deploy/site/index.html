@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zotero Unified Translator · 更新通道</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1f2328;
+    --muted: #656d76;
+    --line: #d8dee4;
+    --accent: #1a6dd4;
+    --ok-bg: #dafbe1;
+    --ok-text: #1a7f37;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --line: #30363d;
+      --accent: #6cb6ff;
+      --ok-bg: #12261e;
+      --ok-text: #3fb950;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 48px 20px;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  main { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.2px; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+  }
+  .row {
+    display: flex;
+    gap: 16px;
+    padding: 9px 0;
+    border-bottom: 1px dashed var(--line);
+    font-size: 14px;
+    align-items: baseline;
+  }
+  .row:last-child { border-bottom: 0; }
+  .key { flex: 0 0 116px; color: var(--muted); }
+  .val { flex: 1 1 auto; word-break: break-all; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: color-mix(in srgb, var(--line) 40%, transparent);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .badge {
+    display: inline-block;
+    background: var(--ok-bg);
+    color: var(--ok-text);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 20px;
+    vertical-align: 2px;
+    margin-left: 8px;
+  }
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .btn:hover { text-decoration: none; opacity: .9; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Zotero Unified Translator<span class="badge" id="ver-badge">…</span></h1>
+  <p class="sub">Zotero 10 划词与整篇 PDF 翻译插件的自动更新通道</p>
+
+  <div class="card">
+    <div class="row"><span class="key">最新版本</span><span class="val" id="version">读取中…</span></div>
+    <div class="row"><span class="key">宿主要求</span><span class="val" id="host">—</span></div>
+    <div class="row"><span class="key">更新清单</span><span class="val"><a href="./updates.json"><code>./updates.json</code></a></span></div>
+    <div class="row"><span class="key">安装包</span><span class="val" id="xpi-cell">—</span></div>
+    <div class="row"><span class="key">源码仓库</span><span class="val"><a href="https://github.com/Luociqvq/zotero-unified-translator">github.com/Luociqvq/zotero-unified-translator</a></span></div>
+  </div>
+
+  <div class="card">
+    <p style="margin:0 0 14px;font-size:14px;color:var(--muted)">
+      已安装插件的用户无需手动下载 —— Zotero 会按插件清单中的更新地址自动检查本页的清单。
+      下面的按钮仅供全新安装使用。
+    </p>
+    <a class="btn" id="dl" href="#">下载最新 XPI</a>
+  </div>
+
+  <footer>本服务仅托管插件的更新清单与安装包，不收集任何用户数据。</footer>
+</main>
+
+<script>
+(async function () {
+  var fallback = 'https://github.com/Luociqvq/zotero-unified-translator/releases/latest';
+  try {
+    var res = await fetch('./updates.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var doc = await res.json();
+    var addons = doc.addons || {};
+    var ids = Object.keys(addons);
+    if (!ids.length) throw new Error('no addons');
+    var list = (addons[ids[0]].updates || []).filter(function (u) { return u && u.version; });
+    if (!list.length) throw new Error('no updates');
+    list.sort(function (a, b) { return cmp(a.version, b.version); });
+    var latest = list[list.length - 1];
+    var z = (latest.applications && latest.applications.zotero) || {};
+
+    document.getElementById('version').textContent = latest.version;
+    document.getElementById('ver-badge').textContent = 'v' + latest.version;
+    if (z.strict_min_version || z.strict_max_version) {
+      document.getElementById('host').textContent =
+        'Zotero ' + (z.strict_min_version || '?') + ' – ' + (z.strict_max_version || '?');
+    }
+    var link = latest.update_link || fallback;
+    document.getElementById('xpi-cell').innerHTML =
+      '<a href="' + link + '"><code>' + link.split('/').pop() + '</code></a>';
+    document.getElementById('dl').href = link;
+  } catch (e) {
+    document.getElementById('version').textContent = '暂时无法读取清单';
+    document.getElementById('ver-badge').textContent = '清单不可用';
+    document.getElementById('dl').href = fallback;
+  }
+
+  function cmp(a, b) {
+    var pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+      var d = (pa[i] || 0) - (pb[i] || 0);
+      if (d) return d;
+    }
+    return 0;
+  }
+})();
+</script>
+</body>
+</html>

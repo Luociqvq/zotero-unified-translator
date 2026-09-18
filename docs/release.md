@@ -20,15 +20,31 @@ Zotero 的更新检查器（`AddonUpdateChecker.sys.mjs`）行为如下：
 
 ```
 插件清单 update_url
-  └─ https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json
+  └─ https://zut.eieu.cn/updates.json              ← 自建更新通道（nginx 静态托管）
        └─ update_link
-            └─ https://github.com/Luociqvq/zotero-unified-translator/releases/download/v<版本>/zotero-unified-translator.xpi
+            └─ https://zut.eieu.cn/release/zotero-unified-translator-<版本>.xpi
 ```
 
-仓库根目录的 `updates.json` 就是那份清单。
+仓库根目录的 `updates.json` 是清单的**唯一真相源**；服务器上的那份就是它，由部署脚本拉取。
+
+同时保留两条 GitHub 镜像，供尚未升级到 v1.0.2 的客户端与手动下载使用：
+
+```
+updates.json 镜像：https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json
+产物镜像：https://github.com/Luociqvq/zotero-unified-translator/releases/download/v<版本>/zotero-unified-translator.xpi
+```
 
 > ⚠️ **v1.0.0 的 XPI 内嵌的是占位域名 `updates.zut.invalid`，不会自动升级。**
-> 从 **v1.0.1** 起才真正接入自动更新。因此 v1.0.1 是最后一个需要手动安装的版本。
+> **v1.0.1** 起接入自动更新，`update_url` 指向 GitHub raw。
+> **v1.0.2** 起改为指向自建的 `zut.eieu.cn`。
+> 所以 **v1.0.1 是最后一个需要手动安装的版本**。
+
+### 为什么是静态托管，不是自建服务
+
+Zotero 的更新检查只需要两个静态文件：一份 JSON 清单，和一个它指向的 XPI。没有服务端逻辑可写，所以这里用 nginx 直接托管，而不是再跑一个应用 —— 少一个会挂的服务，也没有常驻内存要维护。
+
+`updates.json` 显式带 `Cache-Control: no-cache`：**清单被缓存会让 Zotero 一直以为已装版本就是最新版，从而静默不再提示更新**。
+XPI 则用**带版本号的文件名**（`zotero-unified-translator-<版本>.xpi`）并配 `immutable` 长缓存 —— 文件名不可变，缓存安全；若像早期那样用固定文件名，命中的旧缓存会通不过 `update_hash` 校验导致安装失败。
 
 ---
 
@@ -78,7 +94,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-plugin
           "applications": {
             "zotero": { "strict_min_version": "10.0.0", "strict_max_version": "10.0.*" }
           },
-          "update_link": "https://github.com/Luociqvq/zotero-unified-translator/releases/download/v1.0.2/zotero-unified-translator.xpi",
+          "update_link": "https://zut.eieu.cn/release/zotero-unified-translator-1.0.2.xpi",
           "update_hash": "sha256:<第 3 步算出的哈希>",
           "update_info_url": "https://github.com/Luociqvq/zotero-unified-translator/releases/tag/v1.0.2"
         }
@@ -96,7 +112,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-plugin
 node scripts/verify-updates.mjs
 ```
 
-必须输出 `updates.json is consistent with the built XPI.` 才能继续。它检查：条目 id 与 XPI 内的插件 ID 一致、清单里的最新版本与 XPI 版本一致、`update_link` 是 https 且路径形如 `/releases/download/v<版本>/zotero-unified-translator.xpi`、`update_hash` 与产物 sha256 逐字节相符。
+必须输出 `updates.json is consistent with the built XPI.` 才能继续。它检查：条目 id 与 XPI 内的插件 ID 一致、清单里的最新版本与 XPI 版本一致、`update_link` 是 https 且路径形如 `/release/zotero-unified-translator-<版本>.xpi`（或旧的 GitHub Releases 形式）、`update_hash` 与产物 sha256 逐字节相符。
 
 ### 5. 提交、打标签、推送
 
@@ -130,17 +146,37 @@ gh release view v1.0.2 --json assets
 
 把返回的 `digest`（形如 `sha256:...`）与 `updates.json` 里的 `update_hash` 比对，**必须一致**。不一致说明上传了别的文件或清单没更新。
 
+### 8. 部署到更新服务器
+
+清单与产物上传到 Release 之后，把自建通道同步过去：
+
+```bash
+# 在更新服务器上（us8h8g）执行
+curl -sSL -o /tmp/deploy-updates.sh \
+  https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/scripts/deploy-updates.sh
+sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn
+```
+
+脚本会拉取仓库里的 `updates.json` 与落地页、从 GitHub Release 下载该版本的 XPI、**校验 sha256 与清单一致后**才落盘、重新生成 nginx vhost 并 reload。任何一步不符就直接失败退出，不会把不一致的内容发布出去。
+
+> 首次部署需要证书时加 `--issue-cert`，详见 [docs/deployment-updates.md](deployment-updates.md)。
+
+**顺序很重要**：必须是「先发 Release，再部署服务器」。脚本从 Release 取产物，顺序反了会取不到文件（并在校验环节失败退出）。
+
 ---
 
 ## 三、发布后自检
 
 | 检查 | 命令 / 方式 | 期望 |
 |---|---|---|
-| 清单可访问且是新版 | `curl -s https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json` | 返回 JSON，`version` 为新版本 |
+| 自建清单可访问且是新版 | `curl -s https://zut.eieu.cn/updates.json` | 返回 JSON，`version` 为新版本 |
+| 自建产物可下载且哈希正确 | `curl -sSLO https://zut.eieu.cn/release/zotero-unified-translator-<版本>.xpi && sha256sum zotero-unified-translator-<版本>.xpi` | 与 `update_hash` 一致 |
+| 清单未被缓存 | `curl -sSI https://zut.eieu.cn/updates.json \| grep -i cache-control` | 含 `no-cache` |
+| GitHub 清单镜像同步 | `curl -s https://raw.githubusercontent.com/Luociqvq/zotero-unified-translator/main/updates.json` | 与自建清单内容相同 |
 | 清单 hash 与线上产物一致 | 见上一步第 7 条 | 一致 |
 | 客户端能发现更新 | Zotero「工具 → 插件」齿轮 →「检查更新」 | 提示有新版本 |
 
-> `raw.githubusercontent.com` 有 CDN 缓存。推送后若立刻取到旧内容，等 1–5 分钟再试（可在 URL 后加 `?t=<时间戳>` 绕过缓存验证）。
+> `raw.githubusercontent.com` 有 CDN 缓存。推送后若立刻取到旧内容，等 1–5 分钟再试（可在 URL 后加 `?t=<时间戳>` 绕过缓存验证）。自建通道同理，但脚本已经带了 `no-cache` 头，一般即时生效。
 
 ---
 
@@ -154,6 +190,9 @@ gh release view v1.0.2 --json assets
 | 提示有更新但下载失败 | `update_link` 里的版本号与 tag 不一致，或 Release 里没传 XPI | 核对 tag、文件名与 URL |
 | 下载后被拒绝安装 | `update_hash` 与实际文件不符 | 重新上传或用正确 hash |
 | `strict_max_version` 挡掉更新 | 清单里声明的最高宿主版本低于用户 Zotero | 按需放宽 `strict_max_version`（放宽前先确认兼容性） |
+| 清单明明是新版，用户却收不到更新 | 清单响应被缓存，Zotero 看到的是旧内容 | 确认响应头含 `Cache-Control: no-cache`（本项目的 vhost 已设置） |
+| 提示有更新、下载后却安装失败 | XPI 用了固定文件名，命中了上一版的缓存 | 用带版本号的文件名；本项目服务器即按此约定托管 |
+| 部署脚本报 `digest mismatch` | Release 里的产物与清单 hash 不符，或还没发 Release | 先完成第 6 步，确认第 7 步 digest 与清单一致后再部署 |
 
 ---
 

@@ -122,9 +122,23 @@ if (!entry) {
         if (!newest.update_link.startsWith('https://')) {
           fail('update_link must be HTTPS (Zotero drops non-HTTPS links without a strong hash)');
         }
-        const expectedSuffix = `/releases/download/v${newest.version}/${expectedName}`;
-        if (!newest.update_link.endsWith(expectedSuffix)) {
-          fail(`update_link should end with "${expectedSuffix}"`);
+        // Two supported hosts for the artifact:
+        //   GitHub Releases  .../releases/download/v<ver>/zotero-unified-translator.xpi
+        //   self-hosted      <https>://<host>/release/zotero-unified-translator-<ver>.xpi
+        // The self-hosted form is version-pinned on purpose: an immutable URL can
+        // be cached hard without a stale copy ever failing Zotero's hash check.
+        const githubRelease = newest.update_link.endsWith(
+          `/releases/download/v${newest.version}/${expectedName}`,
+        );
+        const selfHosted = newest.update_link.endsWith(
+          `/release/zotero-unified-translator-${newest.version}.xpi`,
+        );
+        if (!githubRelease && !selfHosted) {
+          fail(
+            'update_link must point at either ' +
+              `".../releases/download/v${newest.version}/${expectedName}" or ` +
+              `".../release/zotero-unified-translator-${newest.version}.xpi"`,
+          );
         }
         ok('update_link: ' + newest.update_link);
       } else {

@@ -10,7 +10,7 @@
               "strict_max_version": "10.0.*"
             }
           },
-          "update_link": "https://github.com/Luociqvq/zotero-unified-translator/releases/download/v1.0.1/zotero-unified-translator.xpi",
+          "update_link": "https://zut.eieu.cn/release/zotero-unified-translator-1.0.1.xpi",
           "update_hash": "sha256:00e0a8179efe0fb49f49ca8d0144a2424314f5d9edce3fe53579949c1da661e2",
           "update_info_url": "https://github.com/Luociqvq/zotero-unified-translator/releases/tag/v1.0.1"
         }

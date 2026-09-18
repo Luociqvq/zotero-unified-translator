@@ -1,0 +1,7 @@
+# Shell scripts are fetched straight from raw.githubusercontent.com and executed
+# on Linux, so they must never carry CRLF. core.autocrlf=true on Windows would
+# otherwise be a footgun for anyone committing one.
+*.sh text eol=lf
+
+# PowerShell scripts only ever run on Windows.
+*.ps1 text eol=crlf
