@@ -141,6 +141,16 @@ node scripts/verify-channel.mjs --domain zut.eieu.cn --expect-version 1.0.2
 
 它按客户端的方式把清单跟随到底，任一项不符即以退出码 1 结束。服务器侧的 loopback 回读只能证明 nginx 配置正确，证明不了公网可达、证书有效、CDN 没在发旧内容。
 
+还要跑一次**升级链路**检查，它会从一个已安装的旧版 XPI 出发、顺着它内嵌的 `update_url` 走完 Zotero 的检查流程：
+
+```bash
+gh release download v1.0.1 --pattern "*.xpi" --output /tmp/zut-1.0.1.xpi --clobber
+node scripts/verify-upgrade-path.mjs --xpi /tmp/zut-1.0.1.xpi \
+  --expect-version 1.0.2 --zotero-version 10.0.5
+```
+
+这两条命令回答的是不同问题：`verify-channel.mjs` 说"服务器现在发的是对的"，`verify-upgrade-path.mjs` 说"已经装在用户机器上的旧版能不能被带上来"。后者更接近用户视角，因为 `update_url` 是烧进已安装包的、发出去就改不了。详见 [发版与自动更新维护](release.md) 第三节。
+
 ---
 
 ## 五、排障

@@ -171,7 +171,9 @@ sudo bash /tmp/deploy-updates.sh --domain zut.eieu.cn \
 
 ## 三、发布后自检
 
-一条命令跑完全部线上检查：
+两条命令，覆盖"服务器发的是什么"和"老客户端能不能升上来"两件不同的事。
+
+### 1. 线上通道是否正确
 
 ```bash
 node scripts/verify-channel.mjs --domain zut.eieu.cn --expect-version 1.0.2
@@ -188,13 +190,28 @@ node scripts/verify-channel.mjs --domain zut.eieu.cn --expect-version 1.0.2
 | 与本仓库产物 | 逐字节相同 |
 | 证书 | 未过期（剩余不足 14 天会告警） |
 
-剩下一条只能人工做：
+### 2. 老版本客户端能不能真的升上来
+
+```bash
+# 取一个旧版本的已安装包作为起点
+gh release download v1.0.1 --pattern "*.xpi" --output /tmp/zut-1.0.1.xpi --clobber
+node scripts/verify-upgrade-path.mjs --xpi /tmp/zut-1.0.1.xpi \
+  --expect-version 1.0.2 --zotero-version 10.0.5
+```
+
+上一条只验证"服务器现在发的是对的"；这一条验证**升级链路本身**，因为 `update_url` 是**烧进已安装包的**，发出去之后改不了。一个 1.0.1 的 `update_url` 若指向失效或被冻结的地址，只有从这里才看得出来。
+
+它按 Zotero 的顺序检查：已安装包里有 `update_url` → 该地址可达且可解析 → 清单提供了**更新的**版本 → 条目里的 `applications.zotero` 范围**包含**指定的宿主版本（超出范围时 Zotero 静默丢弃该条目）→ `update_hash` 与实际下载的字节相符 → 下载到的包内部 `manifest.json` 版本与清单声明一致（能抓到"清单先行、产物是旧的"这种状态）。
+
+> `strict_min_version` / `strict_max_version` 约束的是**宿主 Zotero 版本**（10.0.x），不是插件版本。所以要用 `--zotero-version` 指定一个真实宿主版本，否则只能做结构检查。
+>
+> 任一项不符即退出码 1。剩余真·人工项只有一条：
 
 | 检查 | 方式 | 期望 |
 |---|---|---|
 | 客户端能发现更新 | Zotero「工具 → 插件」齿轮 →「检查更新」 | 提示有新版本 |
 
-> `raw.githubusercontent.com` 有 CDN 缓存，推送后若立刻取到旧内容，等 1–5 分钟再试。自建通道不受此影响（脚本已带 `no-cache` 头）。
+> `raw.githubusercontent.com` 有 CDN 缓存（`Cache-Control: max-age=300`），推送后若立刻取到旧内容，等 1–5 分钟再试。自建通道不受此影响（脚本已带 `no-cache` 头）。
 
 ---
 
@@ -214,6 +231,9 @@ node scripts/verify-channel.mjs --domain zut.eieu.cn --expect-version 1.0.2
 | 部署"成功"了，但线上还是上一版 | 用了 `--ref main`，raw CDN 仍在发旧内容 | 改用 tag 或 commit SHA，并带 `--expect-version`（见第 8 步） |
 | 部署卡在 `downloading ...` 长时间无输出 | GitHub Release 的下载在某些网络下会挂住（连接建立但不传数据） | 已加 `--connect-timeout 15 --max-time 300`，超时即失败退出，不会挂死；重跑即可 |
 | 线上清单指向的产物 404 | 部署脚本先发布清单、后安装产物，中途中断就会留下这个状态 | 已改为**产物先落盘、清单最后发布**；遇到该状态重跑部署即可恢复 |
+| 清单宣告了新版本，但下载到的包还是旧的 | 清单与产物不同步（构建后只改了清单，或部署只发了一半） | `scripts/verify-upgrade-path.mjs` 会解包下载到的 XPI、比对其内部版本与清单声明；不一致即失败 |
+| 升级脚本报 `strict_max_version` 不含宿主版本 | 清单里的宿主范围是按插件版本比的（常见误读），或范围确实写窄了 | `strict_min/max_version` 约束的是宿主 Zotero 版本（如 `10.0.*`），不是插件版本；按需放宽后重跑 |
+| 升级脚本报 `ECONNRESET` / `ETIMEDOUT` | 网络抖动（本机代理环境尤其常见） | 脚本会自动重试 3 次；仍失败时**不要**当成链路问题，稍后重跑 |
 
 ---
 
@@ -222,3 +242,4 @@ node scripts/verify-channel.mjs --domain zut.eieu.cn --expect-version 1.0.2
 - **不要移动或覆盖已发布的 tag**。已安装 1.0.x 的用户会按清单去取产物，改动历史会让哈希与实际内容对不上。
 - **不要在清单里留占位域名**。`*.invalid` 会静默关闭自动更新。
 - **不要跳过 `scripts/verify-updates.mjs`**。它拦的正是那些"上线后才发现"的问题。
+- **不要只跑 `verify-channel.mjs` 就收工**。它证明服务器当下发的是对的，证明不了烧在旧包里的 `update_url` 还能把人带上来 —— 那是 `verify-upgrade-path.mjs` 的事。

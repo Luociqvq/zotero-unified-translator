@@ -228,7 +228,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-plugin
 
 > Zotero 10 要求清单里必须存在 `applications.zotero.update_url`，且**只有该字段指向真实清单地址时才会检查更新**。
 > 本仓库构建出的包默认指向自建通道 `https://zut.eieu.cn/updates.json`（`ZUT_UPDATE_URL` 环境变量可覆盖，本地或 fork 构建时用它指向自己的清单）。仓库根目录的 `updates.json` 是给 Zotero 读的更新清单，改版本后必须同步更新，否则自动更新会静默失效 —— `scripts/package-plugin.ps1` 末尾会自动调用 `scripts/verify-updates.mjs` 拦截这类不一致。
-> 完整的发版流程见 [发版与自动更新维护](docs/release.md)。
+> 完整的发版流程见 [发版与自动更新维护](docs/release.md)。发布后可用 `scripts/verify-channel.mjs` 核对线上通道、用 `scripts/verify-upgrade-path.mjs` 核对"已安装的旧版能否升上来"（后者会从一个真实的旧版 XPI 出发，复现 Zotero 的更新检查全过程）。
 
 ### 后端
 
